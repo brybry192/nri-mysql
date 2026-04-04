@@ -35,6 +35,28 @@ At minimum, `COLLECT_CONNECTION_TIMING` must be enabled. The other flags add add
 
 ## How to import
 
+### Option 1: Sync script (recommended)
+
+Use `sync-dashboard.sh` to create or update the dashboard via the NerdGraph API:
+
+```bash
+# First time — creates a new dashboard and prints the GUID:
+NR_ACCOUNT_ID=12345 NR_API_KEY=NRAK-xxx ./sync-dashboard.sh
+
+# Update an existing dashboard:
+NR_DASHBOARD_GUID=MzA3... NR_ACCOUNT_ID=12345 NR_API_KEY=NRAK-xxx ./sync-dashboard.sh
+```
+
+| Variable | Required | Description |
+|---|---|---|
+| `NR_ACCOUNT_ID` | Yes | Your New Relic account ID |
+| `NR_API_KEY` | Yes | User API key (`NRAK-...`), **not** the ingest license key |
+| `NR_DASHBOARD_GUID` | No | Set to update an existing dashboard; omit to create new |
+
+Generate a User API key at **New Relic > API Keys > Create a key > User key type**.
+
+### Option 2: Manual import
+
 1. Open `mysql-availability-template.json`
 2. Find-and-replace `YOUR_ACCOUNT_ID` with your New Relic account ID (14 occurrences)
 3. In New Relic: **Dashboards > Import dashboard** > paste the JSON
