@@ -1,0 +1,548 @@
+{
+  "name": "MySQL Availability",
+  "description": null,
+  "permissions": "PUBLIC_READ_WRITE",
+  "pages": [
+    {
+      "name": "MySQL Availability",
+      "description": null,
+      "widgets": [
+        {
+          "title": "Database Availability Uptime %",
+          "description": "Availability (available) is a point-in-time signal: \"can I reach this database right now?\" It's a binary 0 or 1 captured each collection cycle.",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 3,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "chartStyles": {
+              "lineInterpolation": "linear"
+            },
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  YOUR_ACCOUNT_ID
+                ],
+                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType = 'implicit' AND label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0.999,
+                  "severity": "success",
+                  "to": 1
+                },
+                {
+                  "from": 0.98,
+                  "severity": "warning",
+                  "to": 0.999
+                },
+                {
+                  "from": 0.98,
+                  "severity": "critical",
+                  "to": 0
+                }
+              ]
+            }
+          }
+        },
+        {
+          "title": "Health Check Error Rate",
+          "description": "Error rate across all check types (implicit, explicit, query). A non-zero rate indicates connectivity, auth, or query issues.",
+          "layout": {
+            "column": 4,
+            "row": 1,
+            "width": 1,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  YOUR_ACCOUNT_ID
+                ],
+                "query": "SELECT percentage(count(*), WHERE hasError = 1) AS 'Error Rate %' FROM MysqlHealthSample WHERE label.instance IN ({{instance}})"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0,
+                  "severity": "success",
+                  "to": 0.005
+                },
+                {
+                  "from": 0.005,
+                  "severity": "warning",
+                  "to": 0.05
+                },
+                {
+                  "from": 0.05,
+                  "severity": "critical",
+                  "to": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "title": "DB Fleet Status",
+          "description": "How many instances are reporting and their current availability state.",
+          "layout": {
+            "column": 5,
+            "row": 1,
+            "width": 4,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "chartStyles": {
+              "lineInterpolation": "linear"
+            },
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  YOUR_ACCOUNT_ID
+                ],
+                "query": "SELECT uniqueCount(label.instance) as 'total instances', filter(uniqueCount(label.instance), WHERE available = 1) AS 'up', filter(uniqueCount(label.instance), WHERE available = 0) AS 'down' FROM MysqlHealthSample WHERE checkType = 'implicit' AND label.instance IN ({{instance}}) SINCE 10 minutes ago"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": null,
+          "layout": {
+            "column": 9,
+            "row": 1,
+            "width": 4,
+            "height": 8
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.markdown"
+          },
+          "rawConfiguration": {
+            "text": "## Database Availability & Uptime\n---\n\n#### Availability\nA **point-in-time** signal captured each collection cycle: *can I reach this database right now?*\n\nAll checks emit `MysqlHealthSample` with a `checkType` attribute:\n\n| checkType | Method | What it proves |\n|---|---|---|\n| **implicit** | MySQL protocol ping (COM_PING) | Server is listening and responds at the wire level |\n| **explicit** | Canary SQL query (e.g. `SELECT 1`) | Query parser, execution engine, and auth layer are functional |\n| **query** | Internal monitoring queries | Individual query health and duration |\n\n> Implicit is lightweight but won't catch thread exhaustion or read-only violations. Explicit exercises the full query path.\n\n---\n\n#### Uptime %\nAvailability **aggregated over a time window** — what fraction of checks succeeded?\n\nUptime % = (successful checks / total checks) × 100\n\nAt a **10s interval** over 5 minutes ≈ 30 checks. If 1 fails → **96.7% uptime**.\n\n---\n\n#### MysqlHealthSample Schema\n\nAll `MysqlHealthSample` events share:\n- `hasError` (0/1) — single field to find all errors\n- `errorCode` — classified error type\n- `errorMessage` — sanitized error detail\n- `durationMs` — execution time\n\n#### Connection Timing (implicit/explicit only)\n\n| Metric | Definition |\n|---|---|\n| **`durationMs`** | Total round-trip time: DNS + TCP + TLS + MySQL auth + query response |\n| **`dnsLookupMs`** | Time to resolve the hostname to an IP via DNS |\n| **`tcpConnectMs`** | Time for the TCP three-way handshake to the resolved IP |\n\n> A spike in DNS or TCP time indicates infrastructure issues, not MySQL. A spike in durationMs with normal TCP suggests MySQL-level contention.\n"
+          }
+        },
+        {
+          "title": "Uptime % Over Time",
+          "description": "Database Availability by Instance",
+          "layout": {
+            "column": 1,
+            "row": 2,
+            "width": 4,
+            "height": 4
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  YOUR_ACCOUNT_ID
+                ],
+                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType IN ('implicit', 'explicit') AND label.instance IN ({{instance}}) TIMESERIES FACET label.instance, label.availability_zone"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "yAxisLeft": {
+              "zero": true
+            }
+          }
+        },
+        {
+          "title": "Response Time (DNS + TCP + Query)",
+          "description": "Connection phase breakdown: DNS resolution, TCP handshake, and total query duration across implicit and explicit checks.",
+          "layout": {
+            "column": 5,
+            "row": 2,
+            "width": 4,
+            "height": 4
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  YOUR_ACCOUNT_ID
+                ],
+                "query": "SELECT max(durationMs), max(dnsLookupMs), max(tcpConnectMs) FROM MysqlHealthSample WHERE checkType IN ('implicit', 'explicit') AND label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "yAxisLeft": {
+              "zero": true
+            }
+          }
+        },
+        {
+          "title": "Errors Over Time",
+          "description": "Error count by classified error code across all check types.",
+          "layout": {
+            "column": 1,
+            "row": 6,
+            "width": 5,
+            "height": 2
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  YOUR_ACCOUNT_ID
+                ],
+                "query": "SELECT count(*) FROM MysqlHealthSample WHERE hasError = 1 AND label.instance IN ({{instance}}) FACET errorCode, label.instance TIMESERIES AUTO"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "yAxisLeft": {
+              "zero": true
+            }
+          }
+        },
+        {
+          "title": "Error Breakdown",
+          "description": "Distribution of errors by type.",
+          "layout": {
+            "column": 6,
+            "row": 6,
+            "width": 3,
+            "height": 2
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.pie"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  YOUR_ACCOUNT_ID
+                ],
+                "query": "SELECT count(*) FROM MysqlHealthSample WHERE hasError = 1 AND label.instance IN ({{instance}}) FACET errorCode"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": "Recent Errors",
+          "description": "Most recent error per unique error code/message combination.",
+          "layout": {
+            "column": 1,
+            "row": 8,
+            "width": 8,
+            "height": 2
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  YOUR_ACCOUNT_ID
+                ],
+                "query": "SELECT latest(errorMessage), latest(durationMs), latest(label.instance), latest(checkType) FROM MysqlHealthSample WHERE hasError = 1 AND label.instance IN ({{instance}}) FACET errorCode"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": "Health Check Configuration",
+          "description": "Active check types and canary queries per monitored instance.",
+          "layout": {
+            "column": 1,
+            "row": 10,
+            "width": 8,
+            "height": 2
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  YOUR_ACCOUNT_ID
+                ],
+                "query": "SELECT uniqueCount(checkType), latest(query), latest(label.role), latest(label.service_name), latest(label.availability_zone), latest(label.environment) FROM MysqlHealthSample WHERE label.instance IN ({{instance}}) FACET label.instance SINCE 30 minutes ago"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": "Availability by AZ",
+          "description": "Uptime grouped by availability zone — surfaces zone-specific outages.",
+          "layout": {
+            "column": 1,
+            "row": 12,
+            "width": 4,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  YOUR_ACCOUNT_ID
+                ],
+                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType = 'implicit' AND label.instance IN ({{instance}}) FACET label.availability_zone"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0.999,
+                  "severity": "success",
+                  "to": 1
+                },
+                {
+                  "from": 0.98,
+                  "severity": "warning",
+                  "to": 0.999
+                },
+                {
+                  "from": 0.98,
+                  "severity": "critical",
+                  "to": 0
+                }
+              ]
+            }
+          }
+        },
+        {
+          "title": "Availability by Service",
+          "description": "Uptime grouped by service_name — useful for comparing health across deploys.",
+          "layout": {
+            "column": 5,
+            "row": 12,
+            "width": 4,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  YOUR_ACCOUNT_ID
+                ],
+                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType = 'implicit' AND label.instance IN ({{instance}}) FACET label.service_name"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0.999,
+                  "severity": "success",
+                  "to": 1
+                },
+                {
+                  "from": 0.98,
+                  "severity": "warning",
+                  "to": 0.999
+                },
+                {
+                  "from": 0.98,
+                  "severity": "critical",
+                  "to": 0
+                }
+              ]
+            }
+          }
+        },
+        {
+          "title": "Slowest Internal Queries",
+          "description": "Top internal monitoring queries by average duration. High values may indicate MySQL server pressure.",
+          "layout": {
+            "column": 1,
+            "row": 13,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.bar"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  YOUR_ACCOUNT_ID
+                ],
+                "query": "SELECT average(durationMs) FROM MysqlHealthSample WHERE checkType = 'query' AND label.instance IN ({{instance}}) FACET queryName LIMIT 15"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": "Query Duration Over Time",
+          "description": "Internal monitoring query performance trends. Spikes correlate with MySQL load.",
+          "layout": {
+            "column": 5,
+            "row": 13,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  YOUR_ACCOUNT_ID
+                ],
+                "query": "SELECT average(durationMs), percentile(durationMs, 95) FROM MysqlHealthSample WHERE checkType = 'query' AND label.instance IN ({{instance}}) FACET label.instance TIMESERIES AUTO"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "yAxisLeft": {
+              "zero": true
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variables": [
+    {
+      "name": "instance",
+      "items": null,
+      "defaultValues": [
+        {
+          "value": {
+            "string": "*"
+          }
+        }
+      ],
+      "nrqlQuery": {
+        "accountIds": [
+          YOUR_ACCOUNT_ID
+        ],
+        "query": "SELECT uniques(label.instance) FROM MysqlHealthSample"
+      },
+      "options": {
+        "hiddenOnVariablesBar": false,
+        "ignoreTimeRange": true,
+        "excluded": false,
+        "showApplyAction": true
+      },
+      "title": "Instance",
+      "type": "NRQL",
+      "isMultiSelection": true,
+      "replacementStrategy": "STRING"
+    }
+  ]
+}
