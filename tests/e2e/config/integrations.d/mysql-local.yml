@@ -63,6 +63,38 @@ integrations:
       role: replica
       availability_zone: 2b
 
+  # ── Slow check (e2e-mysql-1, same host) ───────────────────────────────────
+  # Deliberately slow canary query — SELECT SLEEP(5) takes 5 seconds, giving
+  # the chaos test a reliable window to find and KILL the connection mid-query.
+  # Used by test-availability.sh to demonstrate TCP RST / connection-killed
+  # error classification. No metric collection (just availability probes).
+  - name: nri-mysql
+    env:
+      USERNAME: root
+      PASSWORD: e2e_test_password
+      HOSTNAME: e2e-mysql-1
+      PORT: "3306"
+      DATABASE: demo
+      REMOTE_MONITORING: "true"
+
+      # ── Observability flags ──────────────────────────────────────────────
+      COLLECT_CONNECTION_TIMING: "true"
+      AVAILABILITY_CHECK_QUERY: "SELECT SLEEP(5)"
+      AVAILABILITY_CHECK_TIMEOUT_MS: "10000"
+      COLLECT_QUERY_TELEMETRY: "true"
+
+    interval: 15s
+    labels:
+      team: go-dev
+      service_type: mysql
+      environment: testing
+      region: local.docker
+      geo: us
+      service_name: e2e-mysql
+      instance: e2e-mysql-1-slowcheck
+      role: slowcheck
+      availability_zone: 2a
+
   # ── Standalone (e2e-inventorydb) ───────────────────────────────────────────
   # A separate deploy — different service_name, its own database.
   # Uses explicit canary query for availability.

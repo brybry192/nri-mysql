@@ -76,7 +76,7 @@ hold "$STABILIZE_DURATION" "baseline collection"
 
 # ── Test 1: Container stop (DNS failure) ─────────────────────────────────────
 
-banner "Test 1/4: Container stop — replica (DNS resolution failure)"
+banner "Test 1/5: Container stop — replica (DNS resolution failure)"
 echo "  Stopping e2e-mysql-2..."
 docker compose stop e2e-mysql-2
 echo "  Container stopped. Agent should report dns_resolution_failed for e2e-mysql-2."
@@ -89,7 +89,7 @@ hold "$STABILIZE_DURATION" "recovery stabilization"
 
 # ── Test 2: Network disconnect (connection timeout) ──────────────────────────
 
-banner "Test 2/4: Network disconnect — primary (connection timeout)"
+banner "Test 2/5: Network disconnect — primary (connection timeout)"
 echo "  Disconnecting e2e-mysql-1 from the network..."
 docker network disconnect e2e_default e2e-mysql-1 2>/dev/null || \
     docker network disconnect "$(docker compose ps e2e-mysql-1 --format '{{.Networks}}')" e2e-mysql-1
@@ -104,7 +104,7 @@ hold "$STABILIZE_DURATION" "recovery stabilization"
 
 # ── Test 3: Pause container (I/O freeze) ─────────────────────────────────────
 
-banner "Test 3/4: Container pause — replica (connection hang / timeout)"
+banner "Test 3/5: Container pause — replica (connection hang / timeout)"
 echo "  Pausing e2e-mysql-2 (SIGSTOP — process frozen, TCP stays open)..."
 docker compose pause e2e-mysql-2
 echo "  Container paused. Agent should report timeout for e2e-mysql-2."
@@ -117,7 +117,7 @@ hold "$STABILIZE_DURATION" "recovery stabilization"
 
 # ── Test 4: MySQL password change (auth failure) ─────────────────────────────
 
-banner "Test 4/4: Password change — primary (authentication failure)"
+banner "Test 4/5: Password change — primary (authentication failure)"
 echo "  Changing root password on e2e-mysql-1..."
 docker compose exec -T e2e-mysql-1 \
     mysql -u root -pe2e_test_password -e "ALTER USER 'root'@'%' IDENTIFIED BY 'wrong_password'; FLUSH PRIVILEGES;" 2>/dev/null
@@ -130,16 +130,112 @@ docker compose exec -T e2e-mysql-1 \
 echo "  Password restored."
 hold "$STABILIZE_DURATION" "recovery stabilization"
 
+# ── Test 5: Kill query mid-flight (KILL QUERY vs KILL connection) ─────────────
+#
+# The e2e-mysql-1-slowcheck instance runs SELECT SLEEP(5) as its canary query,
+# giving us a reliable window to find the process and kill it.
+#
+# Phase A: KILL QUERY — interrupts the query but keeps the connection alive.
+#          Client receives MySQL error 1317 ("Query execution was interrupted").
+#          classifyError → mysql_error_1317
+#
+# Phase B: KILL (connection) — destroys the entire connection mid-query.
+#          Client receives TCP RST / EOF.
+#          classifyError → connection_reset or server_closed_connection
+
+# Helper: find the SLEEP(5) query in the process list.
+find_sleep_proc() {
+    docker compose exec -T e2e-mysql-1 \
+        mysql -u root -pe2e_test_password -N -e \
+        "SELECT ID FROM information_schema.PROCESSLIST WHERE INFO LIKE '%SLEEP(5)%' AND COMMAND = 'Query' LIMIT 1" 2>/dev/null | tr -d '[:space:]'
+}
+
+# Helper: poll until the SLEEP query appears (up to 20s).
+wait_for_sleep() {
+    local proc_id=""
+    for attempt in $(seq 1 40); do
+        proc_id=$(find_sleep_proc)
+        if [ -n "$proc_id" ]; then
+            echo "$proc_id"
+            return 0
+        fi
+        sleep 0.5
+    done
+    return 1
+}
+
+banner "Test 5/5: Kill query — slowcheck (query interrupt + connection kill)"
+
+# ── Phase A: KILL QUERY (query interrupted, connection survives) ──────────────
+
+echo ""
+echo "  Phase A: KILL QUERY — interrupt query, keep connection alive"
+echo "  Expected error: mysql_error_1317 (Query execution was interrupted)"
+echo ""
+
+KILL_QUERY_ROUNDS=3
+for round in $(seq 1 "$KILL_QUERY_ROUNDS"); do
+    echo "  Round $round/$KILL_QUERY_ROUNDS: waiting for SLEEP query..."
+    PROC_ID=$(wait_for_sleep) || true
+
+    if [ -n "$PROC_ID" ]; then
+        echo "  Found SLEEP query on process $PROC_ID — killing query..."
+        docker compose exec -T e2e-mysql-1 \
+            mysql -u root -pe2e_test_password -e "KILL QUERY $PROC_ID" 2>/dev/null
+        echo "  Query killed (connection preserved). Agent should report mysql_error_1317."
+    else
+        echo "  WARNING: SLEEP query not found within 20s (round $round). Skipping."
+    fi
+
+    if [ "$round" -lt "$KILL_QUERY_ROUNDS" ]; then
+        echo "  Waiting for next collection cycle..."
+        sleep "$CYCLE"
+    fi
+done
+
+hold "$STABILIZE_DURATION" "stabilization between phases"
+
+# ── Phase B: KILL (connection destroyed, TCP RST) ────────────────────────────
+
+echo ""
+echo "  Phase B: KILL — destroy entire connection mid-query"
+echo "  Expected error: connection_reset or server_closed_connection"
+echo ""
+
+KILL_CONN_ROUNDS=3
+for round in $(seq 1 "$KILL_CONN_ROUNDS"); do
+    echo "  Round $round/$KILL_CONN_ROUNDS: waiting for SLEEP query..."
+    PROC_ID=$(wait_for_sleep) || true
+
+    if [ -n "$PROC_ID" ]; then
+        echo "  Found SLEEP query on process $PROC_ID — killing connection..."
+        docker compose exec -T e2e-mysql-1 \
+            mysql -u root -pe2e_test_password -e "KILL $PROC_ID" 2>/dev/null
+        echo "  Connection killed. Agent should report connection_reset or server_closed_connection."
+    else
+        echo "  WARNING: SLEEP query not found within 20s (round $round). Skipping."
+    fi
+
+    if [ "$round" -lt "$KILL_CONN_ROUNDS" ]; then
+        echo "  Waiting for next collection cycle..."
+        sleep "$CYCLE"
+    fi
+done
+
+hold "$STABILIZE_DURATION" "recovery stabilization"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 banner "Chaos test complete"
 echo ""
 echo "  All scenarios executed. Check your New Relic dashboard for:"
 echo ""
-echo "  Test 1 — dns_resolution_failed     (replica container stopped)"
-echo "  Test 2 — connection_refused/timeout (primary network disconnected)"
-echo "  Test 3 — timeout                    (replica container paused)"
-echo "  Test 4 — mysql_error_1045           (primary password changed)"
+echo "  Test 1 — dns_resolution_failed           (replica container stopped)"
+echo "  Test 2 — connection_refused/timeout       (primary network disconnected)"
+echo "  Test 3 — timeout                          (replica container paused)"
+echo "  Test 4 — mysql_error_1045                 (primary password changed)"
+echo "  Test 5A — mysql_error_1317                (slowcheck KILL QUERY)"
+echo "  Test 5B — connection_reset/server_closed  (slowcheck KILL connection)"
 echo ""
 echo "  Use NRQL:"
 echo "    SELECT * FROM MysqlHealthSample"
