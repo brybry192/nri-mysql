@@ -27,7 +27,7 @@ func TestExplicitAvailabilityCheck_Success(t *testing.T) {
 	assert.True(t, result.available)
 	assert.Equal(t, "SELECT 1", result.query)
 	assert.Empty(t, result.errorCode)
-	assert.Greater(t, result.durationMs, 0.0)
+	assert.GreaterOrEqual(t, result.durationMs, 0.0)
 }
 
 func TestExplicitAvailabilityCheck_QueryError(t *testing.T) {

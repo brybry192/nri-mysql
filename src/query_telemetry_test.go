@@ -95,6 +95,7 @@ func TestClassifyError_StringMatches(t *testing.T) {
 	}{
 		{"connection refused", "connection_refused"},
 		{"dial tcp: connection refused", "connection_refused"},
+		{"invalid connection", "invalid_connection"},
 		{"unexpected EOF", "server_closed_connection"},
 		{"connection reset by peer", "connection_reset"},
 		{"no such host", "dns_resolution_failed"},
@@ -110,6 +111,13 @@ func TestClassifyError_StringMatches(t *testing.T) {
 			assert.Equal(t, tt.expectedCode, code)
 		})
 	}
+}
+
+func TestClassifyError_AlreadyClassified(t *testing.T) {
+	err := &classifiedError{code: "mysql_error_1045", msg: "Access denied"}
+	code, msg := classifyError(err)
+	assert.Equal(t, "mysql_error_1045", code)
+	assert.Equal(t, "Access denied", msg)
 }
 
 func TestTelemetryAccumulator_Disabled(t *testing.T) {

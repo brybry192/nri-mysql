@@ -54,10 +54,28 @@ func extractQueryName(query string) string {
 	return strings.ToUpper(words[0] + "_" + words[1])
 }
 
+// classifiedError is an error that has already been classified by a prior call
+// to classifyError. When this type is passed back into classifyError, the
+// pre-classified code and message are returned directly without re-classification.
+type classifiedError struct {
+	code string
+	msg  string
+}
+
+func (e *classifiedError) Error() string {
+	return fmt.Sprintf("%s: %s", e.code, e.msg)
+}
+
 // classifyError converts a raw error into a structured (code, message) pair.
 func classifyError(err error) (code, message string) {
 	if err == nil {
 		return "", ""
+	}
+
+	// Already classified — pass through.
+	var ce *classifiedError
+	if errors.As(err, &ce) {
+		return ce.code, ce.msg
 	}
 
 	message = sanitizeErrorMessage(err.Error())
@@ -85,6 +103,8 @@ func classifyError(err error) (code, message string) {
 	switch {
 	case strings.Contains(lower, "connection refused"):
 		return "connection_refused", message
+	case strings.Contains(lower, "invalid connection"):
+		return "invalid_connection", message
 	case strings.Contains(lower, "eof"):
 		return "server_closed_connection", message
 	case strings.Contains(lower, "connection reset"):

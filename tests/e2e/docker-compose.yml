@@ -49,7 +49,7 @@ services:
   # A separate, independent MySQL deploy — not part of the e2e-mysql replica set.
   e2e-inventorydb:
     image: mysql:8.0
-    container_name: e2e-inventorydb
+    container_name: mysql-e2e-inventorydb
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-e2e_test_password}
       MYSQL_DATABASE: inventory
@@ -72,7 +72,7 @@ services:
     build:
       context: ../../          # repo root
       dockerfile: tests/e2e/Dockerfile.agent
-    container_name: e2e-newrelic-infra
+    container_name: mysql-e2e-newrelic-infra
     depends_on:
       e2e-mysql-1:
         condition: service_healthy

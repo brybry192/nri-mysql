@@ -82,7 +82,7 @@ func main() {
 			responseTimeMs = explicitResult.durationMs
 			// Use the availability check result to derive the implicit connection signal.
 			if !explicitResult.available {
-				connErr = fmt.Errorf("%s: %s", explicitResult.errorCode, explicitResult.errorMessage)
+				connErr = &classifiedError{code: explicitResult.errorCode, msg: explicitResult.errorMessage}
 			}
 		} else if obs.CollectConnectionTiming {
 			// No availability check — ping to trigger the timing dialer before reading db.Timing.
