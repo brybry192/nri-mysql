@@ -15,7 +15,8 @@ help:
 	@echo "    make run-once-replica     exec integration against replica, print JSON"
 	@echo "    make run-once-inventorydb exec integration against inventorydb, print JSON"
 	@echo "    make repl-status          show replica replication status"
-	@echo "    make test-availability    chaos test: trigger real failure scenarios"
+	@echo "    make test-availability    chaos test: trigger real failure scenarios (~6 min)"
+	@echo "    make test-fast           same chaos test, 1 cycle per phase (~2 min)"
 	@echo ""
 	@echo "  RDS / Aurora MySQL testing:"
 	@echo "    make up-rds             start infra agent only (no local mysql)"
@@ -151,10 +152,26 @@ repl-status:
 	@docker compose exec e2e-mysql-2 \
 		mysql -u root -pe2e_test_password -e "SHOW REPLICA STATUS\G" 2>/dev/null
 
+# Rebuild the integration binary inside the agent container so tests always
+# run against the latest source.  Uses --build to recompile only when files
+# have changed (Docker BuildKit cache).
+.PHONY: rebuild-agent
+rebuild-agent:
+	@echo "Rebuilding agent image with latest source..."
+	docker compose build newrelic-infra
+	docker compose up -d newrelic-infra
+	@echo "Agent container restarted with fresh binary."
+
 # Run availability error classification tests against the running stack.
+# Always rebuilds the agent binary first to avoid stale-binary surprises.
 .PHONY: test-availability
-test-availability:
+test-availability: rebuild-agent
 	@./test-availability.sh
+
+# Fast mode — 2 fail cycles per phase (~3 min vs ~6 min).
+.PHONY: test-fast
+test-fast: rebuild-agent
+	@FAST=1 ./test-availability.sh
 
 # ── RDS / Aurora stack ───────────────────────────────────────────────────────
 

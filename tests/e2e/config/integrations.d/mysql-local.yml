@@ -64,10 +64,12 @@ integrations:
       availability_zone: 2b
 
   # ── Slow check (e2e-mysql-1, same host) ───────────────────────────────────
-  # Deliberately slow canary query — SELECT SLEEP(5) takes 5 seconds, giving
-  # the chaos test a reliable window to find and KILL the connection mid-query.
-  # Used by test-availability.sh to demonstrate TCP RST / connection-killed
-  # error classification. No metric collection (just availability probes).
+  # Deliberately slow canary query — BENCHMARK runs SHA2 in a tight loop for
+  # ~10-20s, giving the chaos test a reliable window to KILL QUERY or KILL the
+  # connection mid-query.  Unlike SELECT SLEEP(), BENCHMARK genuinely throws
+  # MySQL error 1317 ("Query execution was interrupted") when KILL QUERY is
+  # issued, making it suitable for testing query-kill error classification.
+  # Used by test-availability.sh Test 5.
   - name: nri-mysql
     env:
       USERNAME: root
@@ -79,8 +81,8 @@ integrations:
 
       # ── Observability flags ──────────────────────────────────────────────
       COLLECT_CONNECTION_TIMING: "true"
-      AVAILABILITY_CHECK_QUERY: "SELECT SLEEP(5)"
-      AVAILABILITY_CHECK_TIMEOUT_MS: "10000"
+      AVAILABILITY_CHECK_QUERY: "SELECT BENCHMARK(50000000, SHA2('nri-mysql-chaos-test', 256))"
+      AVAILABILITY_CHECK_TIMEOUT_MS: "30000"
       COLLECT_QUERY_TELEMETRY: "true"
 
     interval: 15s

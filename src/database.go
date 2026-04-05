@@ -80,9 +80,13 @@ func (db *database) close() {
 
 // ping issues a lightweight Ping to trigger the timing dialer on the first real
 // connection. Call this before reading db.Timing when only COLLECT_CONNECTION_TIMING
-// is set (and AVAILABILITY_CHECK_QUERY is not).
+// is set (and AVAILABILITY_CHECK_QUERY is not). Uses a 5-second timeout so a
+// frozen or unresponsive server produces a timeout error rather than blocking
+// indefinitely.
 func (db *database) ping() error {
-	return db.source.PingContext(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return db.source.PingContext(ctx)
 }
 
 // queryContext runs the given query with context support, returning *sql.Rows.

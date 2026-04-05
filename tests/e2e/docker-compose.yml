@@ -4,6 +4,8 @@ services:
   e2e-mysql-1:
     image: mysql:8.0
     container_name: e2e-mysql-1
+    cap_add:
+      - NET_ADMIN
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-e2e_test_password}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-demo}
