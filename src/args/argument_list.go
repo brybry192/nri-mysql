@@ -21,6 +21,10 @@ type ArgumentList struct {
 	ShowVersion                          bool   `default:"false" help:"Display build information and exit."`
 	EnableQueryMonitoring                bool   `default:"false" help:"Enable collection of detailed query performance metrics."`
 	SlowQueryMonitoringFetchInterval     int    `default:"30" help:"Fetch interval in seconds for grouped slow queries. Should match the interval in mysql-config.yml."`
+	CollectConnectionTiming              bool   `default:"false" help:"If true, measures DNS lookup and TCP connect time via the connection's dial hook and reports them in MysqlHealthSample with checkType=implicit."`
+	AvailabilityCheckQuery               string `default:"" help:"SQL query for explicit availability check. If set, runs each cycle with a deadline and reports result in MysqlHealthSample with checkType=explicit. Common value: 'SELECT 1'."`
+	AvailabilityCheckTimeoutMs           int    `default:"5000" help:"Timeout in milliseconds for the explicit availability check query. Defaults to 5000ms."`
+	CollectQueryTelemetry                bool   `default:"false" help:"If true, emits a MysqlHealthSample event with checkType=query for every internal monitoring query with duration, error status, and error classification."`
 	QueryMonitoringResponseTimeThreshold int    `default:"1" help:"Threshold in milliseconds for query response time to fetch individual query performance metrics."`
 	QueryMonitoringCountThreshold        int    `default:"20" help:"Query count limit for fetching grouped slow and individual query performance metrics."`
 	ExcludedPerformanceDatabases         string `default:"[]" help:"A JSON array that lists databases to be excluded from performance metrics collection. System databases are always excluded."`
