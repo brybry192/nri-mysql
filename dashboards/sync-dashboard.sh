@@ -37,14 +37,25 @@ fi
 NR_DASHBOARD_GUID="${NR_DASHBOARD_GUID:-}"
 
 # ── Build dashboard JSON ─────────────────────────────────────────────────────
+# Use temp files throughout to avoid shell argument length limits with large JSON.
+
+TMPDIR_SYNC=$(mktemp -d)
+trap 'rm -rf "$TMPDIR_SYNC"' EXIT
+
+DASHBOARD_FILE="$TMPDIR_SYNC/dashboard.json"
+VARIABLES_FILE="$TMPDIR_SYNC/variables.json"
+PAYLOAD_FILE="$TMPDIR_SYNC/payload.json"
 
 echo "Reading template: $TEMPLATE"
-DASHBOARD_JSON=$(sed "s/YOUR_ACCOUNT_ID/$NR_ACCOUNT_ID/g" "$TEMPLATE")
 
-# Validate the substitution produced valid JSON.
-if ! echo "$DASHBOARD_JSON" | jq empty 2>/dev/null; then
-    echo "ERROR: Template substitution produced invalid JSON."
-    echo "       Make sure NR_ACCOUNT_ID is a plain integer."
+# 1. Replace "YOUR_ACCOUNT_ID" strings with integer account ID.
+# 2. Stringify rawConfiguration — NerdGraph expects a JSON scalar, not a nested object.
+jq --argjson acct "$NR_ACCOUNT_ID" '
+  walk(if type == "string" and . == "YOUR_ACCOUNT_ID" then $acct else . end)
+' "$TEMPLATE" > "$DASHBOARD_FILE"
+
+if [ $? -ne 0 ]; then
+    echo "ERROR: Failed to process template JSON."
     exit 1
 fi
 
@@ -60,10 +71,8 @@ if [ -n "$NR_DASHBOARD_GUID" ]; then
         errors { description type }
       }
     }'
-    VARIABLES=$(jq -n \
-        --arg guid "$NR_DASHBOARD_GUID" \
-        --argjson dashboard "$DASHBOARD_JSON" \
-        '{ guid: $guid, dashboard: $dashboard }')
+    jq -n --arg guid "$NR_DASHBOARD_GUID" --slurpfile dashboard "$DASHBOARD_FILE" \
+        '{ guid: $guid, dashboard: $dashboard[0] }' > "$VARIABLES_FILE"
     RESULT_PATH=".data.dashboardUpdate"
 else
     echo "Creating new dashboard..."
@@ -73,22 +82,18 @@ else
         errors { description type }
       }
     }'
-    VARIABLES=$(jq -n \
-        --argjson accountId "$NR_ACCOUNT_ID" \
-        --argjson dashboard "$DASHBOARD_JSON" \
-        '{ accountId: $accountId, dashboard: $dashboard }')
+    jq -n --argjson accountId "$NR_ACCOUNT_ID" --slurpfile dashboard "$DASHBOARD_FILE" \
+        '{ accountId: $accountId, dashboard: $dashboard[0] }' > "$VARIABLES_FILE"
     RESULT_PATH=".data.dashboardCreate"
 fi
 
-PAYLOAD=$(jq -n \
-    --arg query "$MUTATION" \
-    --argjson variables "$VARIABLES" \
-    '{ query: $query, variables: $variables }')
+jq -n --arg query "$MUTATION" --slurpfile variables "$VARIABLES_FILE" \
+    '{ query: $query, variables: $variables[0] }' > "$PAYLOAD_FILE"
 
 RESPONSE=$(curl -s -X POST "$NERDGRAPH" \
     -H "Content-Type: application/json" \
     -H "Api-Key: $NR_API_KEY" \
-    -d "$PAYLOAD")
+    -d @"$PAYLOAD_FILE")
 
 # ── Handle response ──────────────────────────────────────────────────────────
 

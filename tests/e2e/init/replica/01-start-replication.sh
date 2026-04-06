@@ -40,7 +40,8 @@ mysql -u root -p"$MYSQL_ROOT_PASSWORD" <<-EOSQL
         SOURCE_USER='${REPL_USER}',
         SOURCE_PASSWORD='${REPL_PASSWORD}',
         SOURCE_LOG_FILE='${LOG_FILE}',
-        SOURCE_LOG_POS=${LOG_POS};
+        SOURCE_LOG_POS=${LOG_POS},
+        SOURCE_SSL=1;
     START REPLICA;
 EOSQL
 

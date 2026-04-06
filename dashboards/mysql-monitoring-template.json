@@ -11,9 +11,9 @@
           "title": "Database Availability Uptime %",
           "description": "Availability (available) is a point-in-time signal: \"can I reach this database right now?\" It's a binary 0 or 1 captured each collection cycle.",
           "layout": {
-            "column": 1,
+            "column": 2,
             "row": 1,
-            "width": 3,
+            "width": 2,
             "height": 1
           },
           "linkedEntityGuids": null,
@@ -32,7 +32,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND label.instance IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) TIMESERIES FACET label.instance"
+                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -81,7 +81,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT percentage(count(*), WHERE hasError = 1) AS 'Error Rate %' FROM MysqlHealthSample WHERE label.instance IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}})"
+                "query": "SELECT percentage(count(*), WHERE hasError = 1) AS 'Error Rate %' FROM MysqlHealthSample WHERE entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}})"
               }
             ],
             "platformOptions": {
@@ -134,7 +134,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT uniqueCount(label.instance) as 'total instances', filter(uniqueCount(label.instance), WHERE available = 1) AS 'up', filter(uniqueCount(label.instance), WHERE available = 0) AS 'down' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND label.instance IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) SINCE 10 minutes ago"
+                "query": "SELECT uniqueCount(label.instance) as 'total instances', filter(uniqueCount(label.instance), WHERE available = 1) AS 'up', filter(uniqueCount(label.instance), WHERE available = 0) AS 'down' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) SINCE 10 minutes ago"
               }
             ],
             "platformOptions": {
@@ -183,7 +183,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND label.instance IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) TIMESERIES FACET label.instance, label.availability_zone"
+                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance', label.availability_zone"
               }
             ],
             "platformOptions": {
@@ -219,7 +219,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT max(durationMs) AS 'total', max(dnsLookupMs) AS 'dns', max(tcpConnectMs) AS 'tcp', max(tlsHandshakeMs) AS 'tls' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND label.instance IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) TIMESERIES FACET label.instance"
+                "query": "SELECT max(durationMs) AS 'total', max(dnsLookupMs) AS 'dns', max(tcpConnectMs) AS 'tcp', max(tlsHandshakeMs) AS 'tls' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -256,7 +256,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND label.instance IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET label.service_name, label.availability_zone"
+                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET label.service_name, label.availability_zone"
               }
             ],
             "platformOptions": {
@@ -302,7 +302,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND label.instance IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET label.service_name"
+                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET label.service_name"
               }
             ],
             "platformOptions": {
@@ -351,7 +351,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(durationMs) AS 'total', average(dnsLookupMs) AS 'dns', average(tcpConnectMs) AS 'tcp', average(tlsHandshakeMs) AS 'tls' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND label.instance IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET label.instance"
+                "query": "SELECT average(durationMs) AS 'total', average(dnsLookupMs) AS 'dns', average(tcpConnectMs) AS 'tcp', average(tlsHandshakeMs) AS 'tls' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -388,7 +388,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(durationMs) AS 'avg' FROM MysqlHealthSample WHERE checkType = 'query' AND label.instance IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET queryName LIMIT 15"
+                "query": "SELECT average(durationMs) AS 'avg' FROM MysqlHealthSample WHERE checkType = 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET queryName LIMIT 15"
               }
             ],
             "platformOptions": {
@@ -421,7 +421,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(durationMs) AS 'avg', percentile(durationMs, 95) AS 'p95' FROM MysqlHealthSample WHERE checkType = 'query' AND label.instance IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET label.instance TIMESERIES AUTO"
+                "query": "SELECT average(durationMs) AS 'avg', percentile(durationMs, 95) AS 'p95' FROM MysqlHealthSample WHERE checkType = 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance' TIMESERIES AUTO"
               }
             ],
             "platformOptions": {
@@ -458,7 +458,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT count(*) FROM MysqlHealthSample WHERE hasError = 1 AND label.instance IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET errorCode, label.instance TIMESERIES AUTO"
+                "query": "SELECT count(*) FROM MysqlHealthSample WHERE hasError = 1 AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET errorCode, label.instance TIMESERIES AUTO"
               }
             ],
             "platformOptions": {
@@ -491,7 +491,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT count(*) FROM MysqlHealthSample WHERE hasError = 1 AND label.instance IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET errorCode"
+                "query": "SELECT count(*) FROM MysqlHealthSample WHERE hasError = 1 AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET errorCode"
               }
             ],
             "platformOptions": {
@@ -521,7 +521,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT latest(errorMessage), latest(durationMs), latest(checkType) FROM MysqlHealthSample WHERE hasError = 1 AND label.instance IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET errorCode, label.instance, label.service_name"
+                "query": "SELECT latest(errorMessage), latest(durationMs), latest(checkType) FROM MysqlHealthSample WHERE hasError = 1 AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET errorCode, label.instance, label.service_name"
               }
             ],
             "platformOptions": {
@@ -551,11 +551,56 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT latest(query), latest(label.role), latest(label.service_name), latest(label.availability_zone), latest(label.environment) FROM MysqlHealthSample WHERE label.instance IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET label.instance SINCE 30 minutes ago"
+                "query": "SELECT latest(query), latest(label.role), latest(label.service_name), latest(label.availability_zone), latest(label.environment) FROM MysqlHealthSample WHERE entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance' SINCE 30 minutes ago"
               }
             ],
             "platformOptions": {
               "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": "Overall Uptime",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 1,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'uptime %' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}})"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0.999,
+                  "severity": "success",
+                  "to": 1
+                },
+                {
+                  "from": 0.98,
+                  "severity": "warning",
+                  "to": 0.999
+                },
+                {
+                  "from": 0,
+                  "severity": "critical",
+                  "to": 0.98
+                }
+              ]
             }
           }
         }
@@ -583,7 +628,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT latest(net.threadsConnected) AS 'connected', latest(net.threadsRunning) AS 'running', latest(db.threadsCached) AS 'cached', latest(net.maxUsedConnections) AS 'max used' FROM MysqlSample WHERE label.instance IN ({{instance}}) FACET label.instance"
+                "query": "SELECT latest(net.threadsConnected) AS 'connected', latest(net.threadsRunning) AS 'running', latest(db.threadsCached) AS 'cached', latest(net.maxUsedConnections) AS 'max used' FROM MysqlSample WHERE entityName IN ({{instance}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -609,7 +654,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(net.connectionsPerSecond) AS 'connections' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(net.connectionsPerSecond) AS 'connections' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -644,7 +689,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(net.abortedClientsPerSecond) AS 'aborted clients', average(net.abortedConnectsPerSecond) AS 'aborted connects' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(net.abortedClientsPerSecond) AS 'aborted clients', average(net.abortedConnectsPerSecond) AS 'aborted connects' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -679,7 +724,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(net.threadsConnected) AS 'connected', average(net.threadsRunning) AS 'running', average(db.threadsCached) AS 'cached' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(net.threadsConnected) AS 'connected', average(net.threadsRunning) AS 'running', average(db.threadsCached) AS 'cached' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -714,7 +759,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(net.bytesReceivedPerSecond) AS 'received', average(net.bytesSentPerSecond) AS 'sent' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(net.bytesReceivedPerSecond) AS 'received', average(net.bytesSentPerSecond) AS 'sent' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -749,7 +794,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(net.connectionErrorsMaxConnectionsPerSecond) AS 'max_conn errors' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(net.connectionErrorsMaxConnectionsPerSecond) AS 'max_conn errors' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -784,7 +829,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(db.threadCacheMissRate) AS 'miss rate' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(db.threadCacheMissRate) AS 'miss rate' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -841,7 +886,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(query.questionsPerSecond) AS 'QPS' FROM MysqlSample WHERE label.instance IN ({{instance}}) FACET label.instance"
+                "query": "SELECT average(query.questionsPerSecond) AS 'queries/sec' FROM MysqlSample WHERE entityName IN ({{instance}})"
               }
             ],
             "platformOptions": {
@@ -867,7 +912,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(query.slowQueriesPerSecond) AS 'slow/sec' FROM MysqlSample WHERE label.instance IN ({{instance}}) FACET label.instance"
+                "query": "SELECT average(query.slowQueriesPerSecond) AS 'slow queries/sec' FROM MysqlSample WHERE entityName IN ({{instance}})"
               }
             ],
             "platformOptions": {
@@ -912,7 +957,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(db.selectFullJoinPerSecond) AS 'full joins/sec' FROM MysqlSample WHERE label.instance IN ({{instance}}) FACET label.instance"
+                "query": "SELECT average(db.selectFullJoinPerSecond) AS 'full table joins/sec' FROM MysqlSample WHERE entityName IN ({{instance}})"
               }
             ],
             "platformOptions": {
@@ -957,7 +1002,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(db.tablesLocksWaitedPerSecond) AS 'lock waits/sec' FROM MysqlSample WHERE label.instance IN ({{instance}}) FACET label.instance"
+                "query": "SELECT average(db.tablesLocksWaitedPerSecond) AS 'table lock waits/sec' FROM MysqlSample WHERE entityName IN ({{instance}})"
               }
             ],
             "platformOptions": {
@@ -983,7 +1028,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(query.comSelectPerSecond) AS 'SELECT', average(query.comInsertPerSecond) AS 'INSERT', average(query.comUpdatePerSecond) AS 'UPDATE', average(query.comDeletePerSecond) AS 'DELETE', average(query.comCommitPerSecond) AS 'COMMIT', average(query.comRollbackPerSecond) AS 'ROLLBACK' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(query.comSelectPerSecond) AS 'SELECT', average(query.comInsertPerSecond) AS 'INSERT', average(query.comUpdatePerSecond) AS 'UPDATE', average(query.comDeletePerSecond) AS 'DELETE', average(query.comCommitPerSecond) AS 'COMMIT', average(query.comRollbackPerSecond) AS 'ROLLBACK' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1018,7 +1063,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(query.slowQueriesPerSecond) AS 'slow/sec' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(query.slowQueriesPerSecond) AS 'slow queries/sec' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1053,7 +1098,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(db.createdTmpTablesPerSecond) AS 'tmp tables', average(db.createdTmpDiskTablesPerSecond) AS 'tmp disk tables' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(db.createdTmpTablesPerSecond) AS 'tmp tables', average(db.createdTmpDiskTablesPerSecond) AS 'tmp disk tables' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1088,7 +1133,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(db.sortRowsPerSecond) AS 'rows sorted', average(db.sortMergePassesPerSecond) AS 'merge passes' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(db.sortRowsPerSecond) AS 'rows sorted', average(db.sortMergePassesPerSecond) AS 'merge passes' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1123,7 +1168,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(db.openTables) AS 'open tables', average(db.tableOpenCacheHitsPerSecond) AS 'cache hits/s', average(db.tableOpenCacheMissesPerSecond) AS 'cache misses/s' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(db.openTables) AS 'open tables', average(db.tableOpenCacheHitsPerSecond) AS 'cache hits/s', average(db.tableOpenCacheMissesPerSecond) AS 'cache misses/s' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1180,7 +1225,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT latest(db.innodb.bufferPoolPagesData) AS 'data', latest(db.innodb.bufferPoolPagesFree) AS 'free', latest(db.innodb.bufferPoolPagesDirty) AS 'dirty', latest(db.innodb.bufferPoolPagesTotal) AS 'total' FROM MysqlSample WHERE label.instance IN ({{instance}}) FACET label.instance"
+                "query": "SELECT latest(db.innodb.bufferPoolPagesData) AS 'data', latest(db.innodb.bufferPoolPagesFree) AS 'free', latest(db.innodb.bufferPoolPagesDirty) AS 'dirty', latest(db.innodb.bufferPoolPagesTotal) AS 'total' FROM MysqlSample WHERE entityName IN ({{instance}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1206,7 +1251,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT latest(db.innodb.rowLockCurrentWaits) AS 'current waits', latest(db.innodb.rowLockTimeAvg) AS 'avg wait (ms)' FROM MysqlSample WHERE label.instance IN ({{instance}}) FACET label.instance"
+                "query": "SELECT latest(db.innodb.rowLockCurrentWaits) AS 'current waits', latest(db.innodb.rowLockTimeAvg) AS 'avg wait (ms)' FROM MysqlSample WHERE entityName IN ({{instance}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1232,7 +1277,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(db.innodb.rowsReadPerSecond) AS 'read', average(db.innodb.rowsInsertedPerSecond) AS 'insert', average(db.innodb.rowsUpdatedPerSecond) AS 'update', average(db.innodb.rowsDeletedPerSecond) AS 'delete' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(db.innodb.rowsReadPerSecond) AS 'read', average(db.innodb.rowsInsertedPerSecond) AS 'insert', average(db.innodb.rowsUpdatedPerSecond) AS 'update', average(db.innodb.rowsDeletedPerSecond) AS 'delete' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1267,7 +1312,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(db.innodb.bufferPoolReadRequestsPerSecond) AS 'read requests', average(db.innodb.bufferPoolReadsPerSecond) AS 'disk reads', average(db.innodb.bufferPoolWriteRequestsPerSecond) AS 'write requests' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(db.innodb.bufferPoolReadRequestsPerSecond) AS 'read requests', average(db.innodb.bufferPoolReadsPerSecond) AS 'disk reads', average(db.innodb.bufferPoolWriteRequestsPerSecond) AS 'write requests' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1302,7 +1347,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(db.innodb.dataReadBytesPerSecond) AS 'read', average(db.innodb.dataWrittenBytesPerSecond) AS 'written' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(db.innodb.dataReadBytesPerSecond) AS 'read', average(db.innodb.dataWrittenBytesPerSecond) AS 'written' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1337,7 +1382,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(db.innodb.rowLockCurrentWaits) AS 'current waits', average(db.innodb.rowLockWaitsPerSecond) AS 'waits/sec', average(db.innodb.rowLockTimeAvg) AS 'avg wait ms' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(db.innodb.rowLockCurrentWaits) AS 'current waits', average(db.innodb.rowLockWaitsPerSecond) AS 'waits/sec', average(db.innodb.rowLockTimeAvg) AS 'avg wait ms' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1372,7 +1417,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(db.innodb.logWritesPerSecond) AS 'log writes', average(db.innodb.logWaitsPerSecond) AS 'log waits', average(db.innodb.osLogFsyncsPerSecond) AS 'log fsyncs' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(db.innodb.logWritesPerSecond) AS 'log writes', average(db.innodb.logWaitsPerSecond) AS 'log waits', average(db.innodb.osLogFsyncsPerSecond) AS 'log fsyncs' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1407,7 +1452,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(db.innodb.dataPendingReads) AS 'pending reads', average(db.innodb.dataPendingWrites) AS 'pending writes', average(db.innodb.dataPendingFsyncs) AS 'pending fsyncs' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(db.innodb.dataPendingReads) AS 'pending reads', average(db.innodb.dataPendingWrites) AS 'pending writes', average(db.innodb.dataPendingFsyncs) AS 'pending fsyncs' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1464,7 +1509,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT latest(cluster.secondsBehindMaster) AS 'lag (s)' FROM MysqlSample WHERE label.instance IN ({{instance}}) FACET label.instance"
+                "query": "SELECT latest(cluster.secondsBehindMaster) AS 'lag (s)' FROM MysqlSample WHERE entityName IN ({{instance}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1509,11 +1554,25 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT latest(cluster.slaveRunning) AS 'running (1=yes)', latest(cluster.slaveIORunning) AS 'IO thread', latest(cluster.slaveSQLRunning) AS 'SQL thread' FROM MysqlSample WHERE label.instance IN ({{instance}}) FACET label.instance"
+                "query": "SELECT latest(cluster.slaveRunning) AS 'both threads (1=yes)', latest(cluster.slaveIORunning) AS 'IO thread', latest(cluster.slaveSQLRunning) AS 'SQL thread' FROM MysqlSample WHERE entityName IN ({{instance}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
               "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0.5,
+                  "severity": "success",
+                  "to": 1.5
+                },
+                {
+                  "from": 0,
+                  "severity": "critical",
+                  "to": 0.5
+                }
+              ]
             }
           }
         },
@@ -1535,7 +1594,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(cluster.secondsBehindMaster) AS 'lag (s)' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(cluster.secondsBehindMaster) AS 'lag (s)' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1570,7 +1629,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT average(db.relayLogSpace) AS 'relay log bytes' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT average(db.relayLogSpace) AS 'relay log bytes' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1605,7 +1664,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT latest(cluster.readMasterLogPos) AS 'read pos', latest(cluster.execMasterLogPos) AS 'exec pos' FROM MysqlSample WHERE label.instance IN ({{instance}}) TIMESERIES FACET label.instance"
+                "query": "SELECT latest(cluster.readMasterLogPos) AS 'read pos', latest(cluster.execMasterLogPos) AS 'exec pos' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1640,7 +1699,7 @@
                 "accountIds": [
                   "YOUR_ACCOUNT_ID"
                 ],
-                "query": "SELECT latest(cluster.lastIOErrno) AS 'IO errno', latest(cluster.lastIOError) AS 'IO error', latest(cluster.lastSQLErrno) AS 'SQL errno', latest(cluster.lastSQLError) AS 'SQL error', latest(cluster.masterHost) AS 'source host' FROM MysqlSample WHERE label.instance IN ({{instance}}) FACET label.instance"
+                "query": "SELECT latest(cluster.lastIOErrno) AS 'IO errno', latest(cluster.lastIOError) AS 'IO error', latest(cluster.lastSQLErrno) AS 'SQL errno', latest(cluster.lastSQLError) AS 'SQL error', latest(cluster.masterHost) AS 'source host' FROM MysqlSample WHERE entityName IN ({{instance}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
               }
             ],
             "platformOptions": {
@@ -1685,7 +1744,7 @@
         "accountIds": [
           "YOUR_ACCOUNT_ID"
         ],
-        "query": "SELECT uniques(label.instance) FROM MysqlSample"
+        "query": "SELECT uniques(entityName) FROM MysqlSample"
       },
       "options": {
         "hiddenOnVariablesBar": false,

@@ -18,6 +18,8 @@ help:
 	@echo "    make test-availability    chaos test: trigger real failure scenarios (~6 min)"
 	@echo "    make test-fast           same chaos test, 1 cycle per phase (~2 min)"
 	@echo "    make test-chaos          full E2E: up → warm-up → chaos → cool-down → down (~30 min)"
+	@echo "    make load                generate mixed read/write activity (60s default)"
+	@echo "    make load-long           generate activity for 5 minutes"
 	@echo ""
 	@echo "  RDS / Aurora MySQL testing:"
 	@echo "    make up-rds             start infra agent only (no local mysql)"
@@ -216,6 +218,15 @@ test-chaos:
 	$(MAKE) down
 	@echo ""
 	@echo "=== Full E2E chaos test complete ==="
+
+# Generate mixed read/write MySQL activity for populating dashboard charts.
+.PHONY: load
+load:
+	@./generate-load.sh
+
+.PHONY: load-long
+load-long:
+	@./generate-load.sh 300
 
 # ── RDS / Aurora stack ───────────────────────────────────────────────────────
 
