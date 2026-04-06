@@ -1,0 +1,1869 @@
+{
+  "name": "MySQL Monitoring",
+  "description": null,
+  "permissions": "PUBLIC_READ_WRITE",
+  "pages": [
+    {
+      "name": "Availability",
+      "description": null,
+      "widgets": [
+        {
+          "title": "Database Availability Uptime %",
+          "description": "Availability (available) is a point-in-time signal: \"can I reach this database right now?\" It's a binary 0 or 1 captured each collection cycle.",
+          "layout": {
+            "column": 2,
+            "row": 1,
+            "width": 2,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "chartStyles": {
+              "lineInterpolation": "linear"
+            },
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0.999,
+                  "severity": "success",
+                  "to": 1
+                },
+                {
+                  "from": 0.98,
+                  "severity": "warning",
+                  "to": 0.999
+                },
+                {
+                  "from": 0,
+                  "severity": "critical",
+                  "to": 0.98
+                }
+              ]
+            }
+          }
+        },
+        {
+          "title": "Health Check Error Rate",
+          "description": "Error rate across all check types (implicit, explicit, query). A non-zero rate indicates connectivity, auth, or query issues.",
+          "layout": {
+            "column": 4,
+            "row": 1,
+            "width": 1,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT percentage(count(*), WHERE hasError = 1) AS 'Error Rate %' FROM MysqlHealthSample WHERE entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}})"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0,
+                  "severity": "success",
+                  "to": 0.005
+                },
+                {
+                  "from": 0.005,
+                  "severity": "warning",
+                  "to": 0.05
+                },
+                {
+                  "from": 0.05,
+                  "severity": "critical",
+                  "to": 1
+                }
+              ]
+            },
+            "displayMode": "valueAndLabel"
+          }
+        },
+        {
+          "title": "DB Fleet Status",
+          "description": "How many instances are reporting and their current availability state.",
+          "layout": {
+            "column": 5,
+            "row": 1,
+            "width": 4,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "chartStyles": {
+              "lineInterpolation": "linear"
+            },
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT uniqueCount(label.instance) as 'total instances', filter(uniqueCount(label.instance), WHERE available = 1) AS 'up', filter(uniqueCount(label.instance), WHERE available = 0) AS 'down' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) SINCE 10 minutes ago"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": null,
+          "layout": {
+            "column": 9,
+            "row": 1,
+            "width": 4,
+            "height": 15
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.markdown"
+          },
+          "rawConfiguration": {
+            "text": "## Database Availability & Uptime\n---\n\n[nri-mysql GitHub](https://github.com/newrelic/nri-mysql) | [New Relic MySQL docs](https://docs.newrelic.com/docs/infrastructure/host-integrations/host-integrations-list/mysql/mysql-integration/) | [NRQL reference](https://docs.newrelic.com/docs/nrql/get-started/introduction-nrql-new-relics-query-language/)\n\n---\n\n#### Availability\nA **point-in-time** signal captured each collection cycle: *can I reach this database right now?*\n\nAll checks emit `MysqlHealthSample` with a `checkType` attribute:\n\n| checkType | Method | What it proves |\n|---|---|---|\n| **implicit** | MySQL protocol [COM_PING](https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_ping.html) | Server is listening and responds at the wire level |\n| **explicit** | Canary SQL query (e.g. `SELECT 1`) | Query parser, execution engine, and auth layer are functional |\n| **query** | Internal monitoring queries | Individual query health and duration |\n\n> Implicit is lightweight but won't catch thread exhaustion or read-only violations. Explicit exercises the full query path.\n\n**Important:** These checks measure availability *from the integration's perspective* using a single monitoring user. Not every error means the database is down for all consumers. For example, an `mysql_error_1045` (access denied) may indicate a credential issue specific to the monitoring user while the database remains fully available to application traffic. This makes availability monitoring a strong proxy for uptime, but not a guarantee — treat it as one signal alongside application-level health checks.\n\n---\n\n#### Uptime %\nAvailability **aggregated over a time window** — what fraction of checks succeeded?\n\nUptime % = (successful checks / total checks) × 100\n\nAt a **10s interval** over 5 minutes ≈ 30 checks. If 1 fails → **96.7% uptime**.\n\n---\n\n#### MysqlHealthSample Schema\n\nAll `MysqlHealthSample` events share:\n- `hasError` (0/1) — single field to find all errors\n- `errorCode` — classified error type\n- `errorMessage` — sanitized error detail\n- `durationMs` — execution time\n\nSee [NRQL reference](https://docs.newrelic.com/docs/nrql/get-started/introduction-nrql-new-relics-query-language/) for custom queries against this event type.\n\n#### Connection Timing (implicit/explicit only)\n\n| Metric | Definition |\n|---|---|\n| **`durationMs`** | Total round-trip time: DNS + TCP + TLS + MySQL auth + query response |\n| **`dnsLookupMs`** | Time to resolve the hostname to an IP via DNS |\n| **`tcpConnectMs`** | Time for the TCP three-way handshake to the resolved IP |\n| **`tlsHandshakeMs`** | TLS handshake duration (0 when TLS is not configured) |\n\n> A spike in DNS or TCP time indicates infrastructure issues, not MySQL. A spike in `tlsHandshakeMs` suggests certificate or cipher negotiation overhead. Compare TLS-enabled vs non-TLS instances to isolate TLS cost.\n\nSee [MySQL Encrypted Connections](https://dev.mysql.com/doc/refman/8.0/en/encrypted-connections.html) for TLS configuration.\n\n---\n\n#### Error Codes\n\nClassified `errorCode` values emitted in `MysqlHealthSample`. Codes prefixed `mysql_error_` map to the [MySQL Server Error Reference](https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html).\n\n| errorCode | Trigger |\n|---|---|\n| `dns_resolution_failed` | Container stop / DNS failure |\n| `connection_refused` | Port reject / iptables |\n| `timeout` | Container pause / connection hang |\n| `mysql_error_1045` | [Access denied](https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_access_denied_error) — wrong credentials |\n| `invalid_connection` | Server-side connection kill |\n| `tls_error` | [TLS handshake failure](https://dev.mysql.com/doc/refman/8.0/en/encrypted-connections.html) |\n| `connection_reset` | TCP RST / connection reset |\n| `server_closed_connection` | Server closed connection unexpectedly |\n| `unknown_error` | Unclassified errors |\n"
+          }
+        },
+        {
+          "title": "Uptime % Over Time",
+          "description": "Database Availability by Instance",
+          "layout": {
+            "column": 1,
+            "row": 2,
+            "width": 4,
+            "height": 4
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance', label.availability_zone"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "yAxisLeft": {
+              "zero": true
+            }
+          }
+        },
+        {
+          "title": "Response Time — max (ms)",
+          "description": "Connection phase breakdown: DNS resolution, TCP handshake, TLS handshake (when enabled), and total query duration. Non-TLS instances (e.g. inventorydb) will show 0 for TLS Handshake — compare against TLS-enabled instances to see the overhead.",
+          "layout": {
+            "column": 5,
+            "row": 2,
+            "width": 4,
+            "height": 4
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT max(durationMs) AS 'total', max(dnsLookupMs) AS 'dns', max(tcpConnectMs) AS 'tcp', max(tlsHandshakeMs) AS 'tls' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "yAxisLeft": {
+              "zero": true,
+              "title": "ms"
+            }
+          }
+        },
+        {
+          "title": "Availability by Service and AZ",
+          "description": "Uptime grouped by availability zone — surfaces zone-specific outages.",
+          "layout": {
+            "column": 1,
+            "row": 6,
+            "width": 4,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "chartStyles": {
+              "lineInterpolation": "linear"
+            },
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET label.service_name, label.availability_zone"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0.999,
+                  "severity": "success",
+                  "to": 1
+                },
+                {
+                  "from": 0.98,
+                  "severity": "warning",
+                  "to": 0.999
+                },
+                {
+                  "from": 0,
+                  "severity": "critical",
+                  "to": 0.98
+                }
+              ]
+            }
+          }
+        },
+        {
+          "title": "Availability by Service",
+          "description": "Uptime grouped by service_name — useful for comparing health across deploys.",
+          "layout": {
+            "column": 5,
+            "row": 6,
+            "width": 4,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'Uptime %' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET label.service_name"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0.999,
+                  "severity": "success",
+                  "to": 1
+                },
+                {
+                  "from": 0.98,
+                  "severity": "warning",
+                  "to": 0.999
+                },
+                {
+                  "from": 0,
+                  "severity": "critical",
+                  "to": 0.98
+                }
+              ]
+            }
+          }
+        },
+        {
+          "title": "Response Time — avg (ms)",
+          "description": "Average connection duration per instance. TLS-enabled instances include TLS handshake overhead; non-TLS instances show baseline TCP performance.",
+          "layout": {
+            "column": 1,
+            "row": 7,
+            "width": 8,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(durationMs) AS 'total', average(dnsLookupMs) AS 'dns', average(tcpConnectMs) AS 'tcp', average(tlsHandshakeMs) AS 'tls' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "yAxisLeft": {
+              "zero": true,
+              "title": "ms"
+            },
+            "units": {
+              "unit": "MS"
+            }
+          }
+        },
+        {
+          "title": "Slowest Queries — avg (ms)",
+          "description": "Top internal monitoring queries by average duration. High values may indicate MySQL server pressure.",
+          "layout": {
+            "column": 1,
+            "row": 8,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.bar"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(durationMs) AS 'avg' FROM MysqlHealthSample WHERE checkType = 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET queryName LIMIT 15"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": "Query Duration — avg / p95 (ms)",
+          "description": "Internal monitoring query performance trends. Spikes correlate with MySQL load.",
+          "layout": {
+            "column": 5,
+            "row": 8,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(durationMs) AS 'avg', percentile(durationMs, 95) AS 'p95' FROM MysqlHealthSample WHERE checkType = 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance' TIMESERIES AUTO"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "yAxisLeft": {
+              "zero": true,
+              "title": "ms"
+            }
+          }
+        },
+        {
+          "title": "Errors Over Time",
+          "description": "Error count by classified error code across all check types.",
+          "layout": {
+            "column": 1,
+            "row": 11,
+            "width": 5,
+            "height": 2
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT count(*) FROM MysqlHealthSample WHERE hasError = 1 AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET errorCode, label.instance TIMESERIES AUTO"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "yAxisLeft": {
+              "zero": true
+            }
+          }
+        },
+        {
+          "title": "Error Breakdown",
+          "description": "Distribution of errors by type.",
+          "layout": {
+            "column": 6,
+            "row": 11,
+            "width": 3,
+            "height": 2
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.pie"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT count(*) FROM MysqlHealthSample WHERE hasError = 1 AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET errorCode"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": "Recent Errors",
+          "description": "Most recent error per unique error code/message combination.",
+          "layout": {
+            "column": 1,
+            "row": 13,
+            "width": 8,
+            "height": 2
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT latest(errorMessage), latest(durationMs), latest(checkType) FROM MysqlHealthSample WHERE hasError = 1 AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET errorCode, label.instance, label.service_name"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": "Health Check Configuration",
+          "description": "Active check types and canary queries per monitored instance.",
+          "layout": {
+            "column": 1,
+            "row": 15,
+            "width": 8,
+            "height": 2
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "facet": {
+              "showOtherSeries": false
+            },
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT latest(query), latest(label.role), latest(label.service_name), latest(label.availability_zone), latest(label.environment) FROM MysqlHealthSample WHERE entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance' SINCE 30 minutes ago"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": "Overall Uptime",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 1,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT percentage(count(*), WHERE available = 1) AS 'uptime %' FROM MysqlHealthSample WHERE checkType IN ({{checkType}}) AND checkType != 'query' AND entityName IN ({{instance}}) AND label.service_name IN ({{service_name}}) AND label.role IN ({{role}}) AND label.environment IN ({{environment}})"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0.999,
+                  "severity": "success",
+                  "to": 1
+                },
+                {
+                  "from": 0.98,
+                  "severity": "warning",
+                  "to": 0.999
+                },
+                {
+                  "from": 0,
+                  "severity": "critical",
+                  "to": 0.98
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Connections",
+      "description": null,
+      "widgets": [
+        {
+          "title": "Active Connections",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 4,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT latest(net.threadsConnected) AS 'connected', latest(net.threadsRunning) AS 'running', latest(db.threadsCached) AS 'cached', latest(net.maxUsedConnections) AS 'max used' FROM MysqlSample WHERE entityName IN ({{instance}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": "Connection Rate — per second",
+          "layout": {
+            "column": 1,
+            "row": 2,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(net.connectionsPerSecond) AS 'connections' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Aborted Connections — per second",
+          "layout": {
+            "column": 5,
+            "row": 2,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(net.abortedClientsPerSecond) AS 'aborted clients', average(net.abortedConnectsPerSecond) AS 'aborted connects' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Thread Pool",
+          "layout": {
+            "column": 1,
+            "row": 5,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(net.threadsConnected) AS 'connected', average(net.threadsRunning) AS 'running', average(db.threadsCached) AS 'cached' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Network Throughput — bytes/sec",
+          "layout": {
+            "column": 5,
+            "row": 5,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(net.bytesReceivedPerSecond) AS 'received', average(net.bytesSentPerSecond) AS 'sent' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Max Connections Errors — per second",
+          "layout": {
+            "column": 1,
+            "row": 8,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(net.connectionErrorsMaxConnectionsPerSecond) AS 'max_conn errors' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Thread Cache Miss Rate",
+          "layout": {
+            "column": 5,
+            "row": 8,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(db.threadCacheMissRate) AS 'miss rate' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": null,
+          "layout": {
+            "column": 9,
+            "row": 1,
+            "width": 4,
+            "height": 10
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.markdown"
+          },
+          "rawConfiguration": {
+            "text": "## Connections & Throughput\n---\n\n[MySQL Connection Handling](https://dev.mysql.com/doc/refman/8.0/en/connection-interfaces.html) | [Thread Pool](https://dev.mysql.com/doc/refman/8.0/en/thread-pool.html)\n\n---\n\n#### Key Metrics\n\n| Metric | What to watch |\n|---|---|\n| **threadsConnected** | Current open connections — approaching `max_connections` means clients may be refused |\n| **threadsRunning** | Actively executing queries — sustained high values suggest CPU contention or slow queries |\n| **abortedConnects** | Failed connection attempts — spikes indicate auth failures, network issues, or `max_connections` hit |\n| **abortedClients** | Connections closed improperly — often caused by clients not calling `close()` or idle timeout kills |\n\n---\n\n#### Troubleshooting\n\n- **High threadsRunning**: Check for slow queries, missing indexes, or lock contention\n- **Aborted connects spike**: Check credentials, firewall rules, and `max_connections` vs actual connections\n- **Thread cache miss rate > 1%**: Consider increasing `thread_cache_size`\n- **Network throughput spike**: Correlate with query volume — may indicate large result sets or binary log replication traffic\n"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Queries",
+      "description": null,
+      "widgets": [
+        {
+          "title": "Total QPS",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 2,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(query.questionsPerSecond) AS 'queries/sec' FROM MysqlSample WHERE entityName IN ({{instance}})"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": "Slow Queries — per second",
+          "layout": {
+            "column": 3,
+            "row": 1,
+            "width": 2,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(query.slowQueriesPerSecond) AS 'slow queries/sec' FROM MysqlSample WHERE entityName IN ({{instance}})"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0,
+                  "severity": "success",
+                  "to": 0.1
+                },
+                {
+                  "from": 0.1,
+                  "severity": "warning",
+                  "to": 1
+                },
+                {
+                  "from": 1,
+                  "severity": "critical",
+                  "to": 9999
+                }
+              ]
+            }
+          }
+        },
+        {
+          "title": "Full Table Joins — per second",
+          "layout": {
+            "column": 5,
+            "row": 1,
+            "width": 2,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(db.selectFullJoinPerSecond) AS 'full table joins/sec' FROM MysqlSample WHERE entityName IN ({{instance}})"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0,
+                  "severity": "success",
+                  "to": 0.01
+                },
+                {
+                  "from": 0.01,
+                  "severity": "warning",
+                  "to": 1
+                },
+                {
+                  "from": 1,
+                  "severity": "critical",
+                  "to": 9999
+                }
+              ]
+            }
+          }
+        },
+        {
+          "title": "Table Lock Waits — per second",
+          "layout": {
+            "column": 7,
+            "row": 1,
+            "width": 2,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(db.tablesLocksWaitedPerSecond) AS 'table lock waits/sec' FROM MysqlSample WHERE entityName IN ({{instance}})"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": "Query Mix — per second",
+          "layout": {
+            "column": 1,
+            "row": 2,
+            "width": 8,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(query.comSelectPerSecond) AS 'SELECT', average(query.comInsertPerSecond) AS 'INSERT', average(query.comUpdatePerSecond) AS 'UPDATE', average(query.comDeletePerSecond) AS 'DELETE', average(query.comCommitPerSecond) AS 'COMMIT', average(query.comRollbackPerSecond) AS 'ROLLBACK' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Slow Queries Over Time",
+          "layout": {
+            "column": 1,
+            "row": 5,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(query.slowQueriesPerSecond) AS 'slow queries/sec' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Temp Tables — per second",
+          "layout": {
+            "column": 5,
+            "row": 5,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(db.createdTmpTablesPerSecond) AS 'tmp tables', average(db.createdTmpDiskTablesPerSecond) AS 'tmp disk tables' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Sort Operations — per second",
+          "layout": {
+            "column": 1,
+            "row": 8,
+            "width": 4,
+            "height": 2
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(db.sortRowsPerSecond) AS 'rows sorted', average(db.sortMergePassesPerSecond) AS 'merge passes' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Open Tables & Cache",
+          "layout": {
+            "column": 5,
+            "row": 8,
+            "width": 4,
+            "height": 2
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(db.openTables) AS 'open tables', average(db.tableOpenCacheHitsPerSecond) AS 'cache hits/s', average(db.tableOpenCacheMissesPerSecond) AS 'cache misses/s' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": null,
+          "layout": {
+            "column": 9,
+            "row": 1,
+            "width": 4,
+            "height": 9
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.markdown"
+          },
+          "rawConfiguration": {
+            "text": "## Query Performance\n---\n\n[MySQL EXPLAIN](https://dev.mysql.com/doc/refman/8.0/en/explain.html) | [Slow Query Log](https://dev.mysql.com/doc/refman/8.0/en/slow-query-log.html) | [Optimizer](https://dev.mysql.com/doc/refman/8.0/en/optimization.html)\n\n---\n\n#### Key Metrics\n\n| Metric | What to watch |\n|---|---|\n| **questionsPerSecond** | Total statements from clients (excludes replication) — primary workload indicator |\n| **slowQueriesPerSecond** | Queries exceeding `long_query_time` — investigate with slow query log |\n| **selectFullJoinPerSecond** | JOINs without indexes — each one scans a full table; add indexes |\n| **createdTmpDiskTablesPerSecond** | Temp tables overflowing to disk — increase `tmp_table_size` or optimize queries |\n| **sortMergePassesPerSecond** | Sorts that couldn't fit in memory — increase `sort_buffer_size` |\n\n---\n\n#### Query Mix\n\nThe read/write ratio reveals workload character:\n- **Read-heavy** (high SELECT, low INSERT/UPDATE): typical web apps, caching opportunities\n- **Write-heavy** (high INSERT/UPDATE): ETL, logging, consider batching\n- **Balanced**: OLTP workloads\n\n---\n\n#### Troubleshooting\n\n- **Slow queries spike**: Enable slow query log, check `EXPLAIN` for missing indexes\n- **Full joins > 0**: Always add indexes for JOIN columns\n- **Tmp disk tables rising**: Check `GROUP BY` queries, increase `tmp_table_size` / `max_heap_table_size`\n- **Table lock waits**: Consider converting MyISAM tables to InnoDB (row-level locking)\n"
+          }
+        }
+      ]
+    },
+    {
+      "name": "InnoDB",
+      "description": null,
+      "widgets": [
+        {
+          "title": "Buffer Pool Pages",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 4,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT latest(db.innodb.bufferPoolPagesData) AS 'data', latest(db.innodb.bufferPoolPagesFree) AS 'free', latest(db.innodb.bufferPoolPagesDirty) AS 'dirty', latest(db.innodb.bufferPoolPagesTotal) AS 'total' FROM MysqlSample WHERE entityName IN ({{instance}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": "Row Lock Waits",
+          "layout": {
+            "column": 5,
+            "row": 1,
+            "width": 4,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT latest(db.innodb.rowLockCurrentWaits) AS 'current waits', latest(db.innodb.rowLockTimeAvg) AS 'avg wait (ms)' FROM MysqlSample WHERE entityName IN ({{instance}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            }
+          }
+        },
+        {
+          "title": "Row Operations — per second",
+          "layout": {
+            "column": 1,
+            "row": 2,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(db.innodb.rowsReadPerSecond) AS 'read', average(db.innodb.rowsInsertedPerSecond) AS 'insert', average(db.innodb.rowsUpdatedPerSecond) AS 'update', average(db.innodb.rowsDeletedPerSecond) AS 'delete' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Buffer Pool I/O — per second",
+          "layout": {
+            "column": 5,
+            "row": 2,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(db.innodb.bufferPoolReadRequestsPerSecond) AS 'read requests', average(db.innodb.bufferPoolReadsPerSecond) AS 'disk reads', average(db.innodb.bufferPoolWriteRequestsPerSecond) AS 'write requests' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Data I/O Throughput — bytes/sec",
+          "layout": {
+            "column": 1,
+            "row": 5,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(db.innodb.dataReadBytesPerSecond) AS 'read', average(db.innodb.dataWrittenBytesPerSecond) AS 'written' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Row Lock Contention",
+          "layout": {
+            "column": 5,
+            "row": 5,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(db.innodb.rowLockCurrentWaits) AS 'current waits', average(db.innodb.rowLockWaitsPerSecond) AS 'waits/sec', average(db.innodb.rowLockTimeAvg) AS 'avg wait ms' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Redo Log — per second",
+          "layout": {
+            "column": 1,
+            "row": 8,
+            "width": 4,
+            "height": 2
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(db.innodb.logWritesPerSecond) AS 'log writes', average(db.innodb.logWaitsPerSecond) AS 'log waits', average(db.innodb.osLogFsyncsPerSecond) AS 'log fsyncs' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Pending I/O Operations",
+          "layout": {
+            "column": 5,
+            "row": 8,
+            "width": 4,
+            "height": 2
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(db.innodb.dataPendingReads) AS 'pending reads', average(db.innodb.dataPendingWrites) AS 'pending writes', average(db.innodb.dataPendingFsyncs) AS 'pending fsyncs' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": null,
+          "layout": {
+            "column": 9,
+            "row": 1,
+            "width": 4,
+            "height": 9
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.markdown"
+          },
+          "rawConfiguration": {
+            "text": "## InnoDB Engine\n---\n\n[InnoDB Buffer Pool](https://dev.mysql.com/doc/refman/8.0/en/innodb-buffer-pool.html) | [InnoDB I/O](https://dev.mysql.com/doc/refman/8.0/en/innodb-disk-io.html) | [InnoDB Locking](https://dev.mysql.com/doc/refman/8.0/en/innodb-locking.html)\n\n**Requires** `EXTENDED_INNODB_METRICS: \"true\"` in integration config.\n\n---\n\n#### Key Metrics\n\n| Metric | What to watch |\n|---|---|\n| **bufferPoolPagesFree** | Free pages in the buffer pool — approaching 0 means the pool is full and eviction pressure rises |\n| **bufferPoolReads** | Physical disk reads that missed the buffer pool — should be low relative to read requests |\n| **rowLockCurrentWaits** | Transactions waiting for row locks — indicates contention |\n| **rowLockTimeAvg** | Average time spent waiting for row locks (ms) — high values slow transactions |\n| **dataPendingFsyncs** | Pending fsync operations — sustained > 0 means disk can't keep up |\n\n---\n\n#### Buffer Pool Hit Rate\n\nHit rate = 1 - (reads / readRequests). Target > 99%.\n\nA low hit rate means queries are reading from disk instead of memory. Fix: increase `innodb_buffer_pool_size` (ideally 70-80% of available RAM on dedicated DB servers).\n\n---\n\n#### Troubleshooting\n\n- **Buffer pool free pages near 0**: Increase `innodb_buffer_pool_size`\n- **Row lock waits climbing**: Check for long-running transactions, reduce transaction scope\n- **Pending I/O > 0 sustained**: Disk throughput is the bottleneck — consider faster storage or read replicas\n- **Log waits > 0**: Redo log is too small — increase `innodb_log_file_size`\n"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Replication",
+      "description": null,
+      "widgets": [
+        {
+          "title": "Replica Lag — seconds",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 4,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT latest(cluster.secondsBehindMaster) AS 'lag (s)' FROM MysqlSample WHERE entityName IN ({{instance}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0,
+                  "severity": "success",
+                  "to": 5
+                },
+                {
+                  "from": 5,
+                  "severity": "warning",
+                  "to": 30
+                },
+                {
+                  "from": 30,
+                  "severity": "critical",
+                  "to": 9999
+                }
+              ]
+            }
+          }
+        },
+        {
+          "title": "Replication Thread Status",
+          "layout": {
+            "column": 5,
+            "row": 1,
+            "width": 4,
+            "height": 1
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT latest(cluster.slaveRunning) AS 'both threads (1=yes)', latest(cluster.slaveIORunning) AS 'IO thread', latest(cluster.slaveSQLRunning) AS 'SQL thread' FROM MysqlSample WHERE entityName IN ({{instance}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "thresholdsWithSeriesOverrides": {
+              "thresholds": [
+                {
+                  "from": 0.5,
+                  "severity": "success",
+                  "to": 1.5
+                },
+                {
+                  "from": 0,
+                  "severity": "critical",
+                  "to": 0.5
+                }
+              ]
+            }
+          }
+        },
+        {
+          "title": "Replica Lag Over Time",
+          "layout": {
+            "column": 1,
+            "row": 2,
+            "width": 8,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(cluster.secondsBehindMaster) AS 'lag (s)' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Relay Log Space — bytes",
+          "layout": {
+            "column": 1,
+            "row": 5,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT average(db.relayLogSpace) AS 'relay log bytes' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Replication Position",
+          "layout": {
+            "column": 5,
+            "row": 5,
+            "width": 4,
+            "height": 3
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT latest(cluster.readMasterLogPos) AS 'read pos', latest(cluster.execMasterLogPos) AS 'exec pos' FROM MysqlSample WHERE entityName IN ({{instance}}) TIMESERIES FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "legend": {
+              "enabled": true
+            },
+            "yAxisLeft": {
+              "zero": true
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": "Replication Errors",
+          "layout": {
+            "column": 1,
+            "row": 8,
+            "width": 8,
+            "height": 2
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  "YOUR_ACCOUNT_ID"
+                ],
+                "query": "SELECT latest(cluster.lastIOErrno) AS 'IO errno', latest(cluster.lastIOError) AS 'IO error', latest(cluster.lastSQLErrno) AS 'SQL errno', latest(cluster.lastSQLError) AS 'SQL error', latest(cluster.masterHost) AS 'source host' FROM MysqlSample WHERE entityName IN ({{instance}}) FACET capture(entityName, r'.*?:(?P<instance>.+):\\d+') AS 'instance'"
+              }
+            ],
+            "platformOptions": {
+              "ignoreTimeRange": false
+            },
+            "facet": {
+              "showOtherSeries": false
+            }
+          }
+        },
+        {
+          "title": null,
+          "layout": {
+            "column": 9,
+            "row": 1,
+            "width": 4,
+            "height": 9
+          },
+          "linkedEntityGuids": null,
+          "visualization": {
+            "id": "viz.markdown"
+          },
+          "rawConfiguration": {
+            "text": "## Replication\n---\n\n[MySQL Replication](https://dev.mysql.com/doc/refman/8.0/en/replication.html) | [Monitoring Replication](https://dev.mysql.com/doc/refman/8.0/en/replication-administration-status.html) | [SHOW REPLICA STATUS](https://dev.mysql.com/doc/refman/8.0/en/show-replica-status.html)\n\n**Requires** replica instances to be monitored. Metrics auto-populate when the monitored instance is a replica.\n\n---\n\n#### Key Metrics\n\n| Metric | What to watch |\n|---|---|\n| **secondsBehindMaster** | Replication lag in seconds — 0 is ideal; rising values indicate the replica can't keep up |\n| **slaveIORunning** | IO thread status — must be `Yes`; `No` means replication is broken |\n| **slaveSQLRunning** | SQL thread status — must be `Yes`; `No` means an error stopped replay |\n| **relayLogSpace** | Bytes consumed by relay logs — growing without bound suggests SQL thread is stalled |\n\n---\n\n#### Troubleshooting\n\n- **Lag increasing steadily**: Replica can't apply changes fast enough — check for slow queries on replica, consider parallel replication (`slave_parallel_workers`)\n- **IO thread stopped**: Check `lastIOError` — common causes: primary unreachable, auth failure, binlog purged\n- **SQL thread stopped**: Check `lastSQLError` — common causes: duplicate key, schema drift, foreign key constraint\n- **Relay log growing**: SQL thread is stalled — fix the SQL thread error first\n"
+          }
+        }
+      ]
+    }
+  ],
+  "variables": [
+    {
+      "name": "instance",
+      "items": null,
+      "defaultValues": [
+        {
+          "value": {
+            "string": "*"
+          }
+        }
+      ],
+      "nrqlQuery": {
+        "accountIds": [
+          "YOUR_ACCOUNT_ID"
+        ],
+        "query": "SELECT uniques(entityName) FROM MysqlSample"
+      },
+      "options": {
+        "hiddenOnVariablesBar": false,
+        "ignoreTimeRange": false,
+        "excluded": false,
+        "showApplyAction": true
+      },
+      "title": "Instance",
+      "type": "NRQL",
+      "isMultiSelection": true,
+      "replacementStrategy": "STRING"
+    },
+    {
+      "name": "service_name",
+      "items": null,
+      "defaultValues": [
+        {
+          "value": {
+            "string": "*"
+          }
+        }
+      ],
+      "nrqlQuery": {
+        "accountIds": [
+          "YOUR_ACCOUNT_ID"
+        ],
+        "query": "SELECT uniques(label.service_name) FROM MysqlSample"
+      },
+      "options": {
+        "hiddenOnVariablesBar": false,
+        "ignoreTimeRange": false,
+        "excluded": false,
+        "showApplyAction": true
+      },
+      "title": "Service",
+      "type": "NRQL",
+      "isMultiSelection": true,
+      "replacementStrategy": "STRING"
+    },
+    {
+      "name": "role",
+      "items": null,
+      "defaultValues": [
+        {
+          "value": {
+            "string": "*"
+          }
+        }
+      ],
+      "nrqlQuery": {
+        "accountIds": [
+          "YOUR_ACCOUNT_ID"
+        ],
+        "query": "SELECT uniques(label.role) FROM MysqlSample"
+      },
+      "options": {
+        "hiddenOnVariablesBar": false,
+        "ignoreTimeRange": false,
+        "excluded": false,
+        "showApplyAction": true
+      },
+      "title": "Role",
+      "type": "NRQL",
+      "isMultiSelection": true,
+      "replacementStrategy": "STRING"
+    },
+    {
+      "name": "checkType",
+      "items": null,
+      "defaultValues": [
+        {
+          "value": {
+            "string": "*"
+          }
+        }
+      ],
+      "nrqlQuery": {
+        "accountIds": [
+          "YOUR_ACCOUNT_ID"
+        ],
+        "query": "SELECT uniques(checkType) FROM MysqlHealthSample"
+      },
+      "options": {
+        "hiddenOnVariablesBar": false,
+        "ignoreTimeRange": false,
+        "excluded": false,
+        "showApplyAction": true
+      },
+      "title": "Check Type",
+      "type": "NRQL",
+      "isMultiSelection": true,
+      "replacementStrategy": "STRING"
+    },
+    {
+      "name": "environment",
+      "items": null,
+      "defaultValues": [
+        {
+          "value": {
+            "string": "*"
+          }
+        }
+      ],
+      "nrqlQuery": {
+        "accountIds": [
+          "YOUR_ACCOUNT_ID"
+        ],
+        "query": "SELECT uniques(label.environment) FROM MysqlSample"
+      },
+      "options": {
+        "hiddenOnVariablesBar": false,
+        "ignoreTimeRange": false,
+        "excluded": false,
+        "showApplyAction": true
+      },
+      "title": "Environment",
+      "type": "NRQL",
+      "isMultiSelection": true,
+      "replacementStrategy": "STRING"
+    }
+  ]
+}
