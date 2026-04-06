@@ -1,0 +1,20 @@
+# Override file for RDS/Aurora MySQL testing.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.rds.yml up -d --build
+#
+# Removes the local MySQL containers and swaps the integration config to
+# point at the RDS endpoint defined in .env.
+
+services:
+  # Disable all local MySQL containers — we're connecting to RDS instead.
+  e2e-mysql-1:
+    profiles: ["disabled"]
+  e2e-mysql-2:
+    profiles: ["disabled"]
+  e2e-inventorydb:
+    profiles: ["disabled"]
+
+  newrelic-infra:
+    depends_on: []
+    volumes:
+      - ./config/newrelic-infra.yml:/etc/newrelic-infra.yml:ro
+      - ./config/integrations.d-rds/mysql-rds.yml:/etc/newrelic-infra/integrations.d/mysql-rds.yml:ro

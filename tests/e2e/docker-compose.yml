@@ -1,0 +1,99 @@
+services:
+
+  # ── Primary MySQL ──────────────────────────────────────────────────────────
+  e2e-mysql-1:
+    image: mysql:8.0
+    container_name: e2e-mysql-1
+    cap_add:
+      - NET_ADMIN
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-e2e_test_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-demo}
+      MYSQL_USER: ${MYSQL_USER:-e2e_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-e2e_test_password}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-primary-data:/var/lib/mysql
+      - ./mysql/primary.cnf:/etc/mysql/conf.d/replication.cnf:ro
+      - ./init/primary:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-e2e_test_password}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Replica MySQL ──────────────────────────────────────────────────────────
+  e2e-mysql-2:
+    image: mysql:8.0
+    container_name: e2e-mysql-2
+    depends_on:
+      e2e-mysql-1:
+        condition: service_healthy
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-e2e_test_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-demo}
+      MYSQL_USER: ${MYSQL_USER:-e2e_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-e2e_test_password}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-replica-data:/var/lib/mysql
+      - ./mysql/replica.cnf:/etc/mysql/conf.d/replication.cnf:ro
+      - ./init/replica:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-e2e_test_password}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Standalone MySQL (inventorydb) ─────────────────────────────────────────
+  # A separate, independent MySQL deploy — not part of the e2e-mysql replica set.
+  e2e-inventorydb:
+    image: mysql:8.0
+    container_name: mysql-e2e-inventorydb
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-e2e_test_password}
+      MYSQL_DATABASE: inventory
+      MYSQL_USER: ${MYSQL_USER:-e2e_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-e2e_test_password}
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql-inventorydb-data:/var/lib/mysql
+      - ./init/inventorydb:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-e2e_test_password}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── New Relic Infrastructure Agent ─────────────────────────────────────────
+  # Built from the repo root so the Dockerfile can compile the current branch.
+  newrelic-infra:
+    build:
+      context: ../../          # repo root
+      dockerfile: tests/e2e/Dockerfile.agent
+    container_name: mysql-e2e-newrelic-infra
+    depends_on:
+      e2e-mysql-1:
+        condition: service_healthy
+      e2e-mysql-2:
+        condition: service_healthy
+      e2e-inventorydb:
+        condition: service_healthy
+    environment:
+      NRIA_LICENSE_KEY: ${NR_LICENSE_KEY}
+      # Set to 1 for verbose agent logging (useful when first setting up).
+      NRIA_VERBOSE: 0
+    volumes:
+      - ./config/newrelic-infra.yml:/etc/newrelic-infra.yml:ro
+      - ./config/integrations.d:/etc/newrelic-infra/integrations.d:ro
+    cap_add:
+      - SYS_PTRACE
+    privileged: true
+
+volumes:
+  mysql-primary-data:
+  mysql-replica-data:
+  mysql-inventorydb-data:
