@@ -33,6 +33,86 @@ Steps to update the integration tests for the latest supported version:
 3. Change the hostname, enable_query_performance, slow_query_fetch_interval flags to see the integrations stdout for different scenarios
 
 
+## Availability Monitoring / Connection Timing tests
+
+These tests validate the new observability features: connection timing (DNS + TCP), explicit availability check, and query telemetry.
+
+### Full integration test suite
+
+Run all integration tests (builds containers, runs tests, tears down):
+
+```bash
+make integration-test
+```
+
+This builds the `nri-mysql` binary inside a Docker container, starts MySQL 5.7/8.0/9.1 master/slave pairs, runs the Go integration tests against them, then repeats for performance tests. The availability flags are passed as env vars (e.g. `COLLECT_CONNECTION_TIMING=true`).
+
+> **Mac (Apple Silicon):** MySQL 5.7 doesn't support ARM images. Comment out `mysql_master-5-7-35` and `mysql_slave-5-7-35` in `docker-compose.yml` and the corresponding config in `integration_test.go` before running.
+
+### Quick smoke test (no Docker needed)
+
+Build and run against a local or remote MySQL instance:
+
+```bash
+make compile
+
+# Implicit availability only (lightweight ping + timing)
+./bin/nri-mysql \
+  -hostname localhost \
+  -port 3306 \
+  -username root \
+  -password <password> \
+  -collect_connection_timing
+
+# Explicit availability check (canary query)
+./bin/nri-mysql \
+  -hostname localhost \
+  -port 3306 \
+  -username root \
+  -password <password> \
+  -collect_connection_timing \
+  -availability_check_query "SELECT 1"
+
+# Failure path — unreachable port, should still emit available=0
+./bin/nri-mysql \
+  -hostname 127.0.0.1 \
+  -port 19999 \
+  -username root \
+  -password fake \
+  -collect_connection_timing
+```
+
+Expected output includes:
+- `MysqlHealthSample` with `available`, `dnsLookupMs`, `tcpConnectMs`
+- A second `MysqlHealthSample` with `checkType=explicit` and `available`
+
+### Using Docker (existing integration containers)
+
+The MySQL containers in `docker-compose.yml` do not expose ports to the host — the binary must run inside the `nri-mysql` container:
+
+```bash
+cd tests/integration
+docker compose up -d mysql_master-8-0-40
+
+# Exec into the nri-mysql container and run with availability flags
+docker exec integration_nri-mysql_1 /nri-mysql \
+  -hostname mysql_master-8-0-40 \
+  -port 3306 \
+  -username root \
+  -password DBpwd1234 \
+  -collect_connection_timing \
+  -availability_check_query "SELECT 1"
+```
+
+### Flags reference
+
+| Env Var / Flag | Default | Description |
+|---|---|---|
+| `COLLECT_CONNECTION_TIMING` | `false` | Ping + DNS/TCP timing + implicit availability |
+| `AVAILABILITY_CHECK_QUERY` | `""` (disabled) | If set, runs this SQL as explicit canary check |
+| `AVAILABILITY_CHECK_TIMEOUT_MS` | `5000` | Timeout in ms for the explicit check |
+| `COLLECT_QUERY_TELEMETRY` | `false` | Emit per-query performance telemetry |
+
 ## Performance Integration test setup
 
 1. A custom image is built for mysql server to enable performance extensions/flags [Dockerfile](./mysql-performance-config/versions/8.0.40/Dockerfile)
@@ -49,4 +129,4 @@ Steps to update the integration tests for the latest supported version:
     4. 9.1(master, slave, perf)
 2. Including all these containers under the same [docker compose](./docker-compose.yml) was crashing few of the mysql version containers
 3. So, separate containers were created for the performance testing under [docker compose](./docker-compose-performance.yml) file
-4. The [Makefile](../../Makefile) `integration-test` target brings up the docker compose containers, executes the integrations test, brings down the containers. Next brings up the docker compose performance containers, extecutes performance integration tests, brings down the containers. This resolved the crashing of few mysql version containers
+4. The [Makefile](../../Makefile) `integration-test` target brings up the docker compose containers, executes the integrations test, brings down the containers. Next brings up the docker compose performance containers, extecutes performance integration tests, brings down the containers. This resolved the crashing of few mysql version containers.

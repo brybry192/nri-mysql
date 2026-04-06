@@ -1,2 +1,3 @@
-FROM mysql:5.7.35
+ARG TARGETPLATFORM=linux/amd64
+FROM --platform=${TARGETPLATFORM} mysql:5.7.35
 COPY tests/integration/mysql/versions/5.7.35/slave.conf.cnf /etc/mysql/conf.d/mysql.conf.cnf
