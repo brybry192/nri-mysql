@@ -1,7 +1,7 @@
 #!/bin/bash
-# sync-dashboard.sh — Create or update the MySQL Availability dashboard in New Relic.
+# sync-dashboard.sh — Create or update the MySQL Monitoring dashboard in New Relic.
 #
-# Reads mysql-availability-template.json, replaces the account ID placeholder,
+# Reads mysql-monitoring-template.json, replaces the account ID placeholder,
 # and pushes the dashboard via NerdGraph API.
 #
 # Required env vars:
@@ -22,7 +22,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-TEMPLATE="$SCRIPT_DIR/mysql-availability-template.json"
+TEMPLATE="$SCRIPT_DIR/mysql-monitoring-template.json"
 
 # ── Validate inputs ──────────────────────────────────────────────────────────
 
