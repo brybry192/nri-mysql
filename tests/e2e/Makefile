@@ -25,6 +25,10 @@ help:
 	@echo "    make up-rds             start infra agent only (no local mysql)"
 	@echo "    make down-rds           stop rds stack"
 	@echo ""
+	@echo "  Code coverage:"
+	@echo "    make test-unit           run unit tests with race + coverage report"
+	@echo "    make test-coverage       detailed per-function coverage + HTML report"
+	@echo ""
 	@echo "  Rebuild:"
 	@echo "    make rebuild            force-rebuild the agent image and restart"
 	@echo ""
@@ -227,6 +231,29 @@ load:
 .PHONY: load-long
 load-long:
 	@./generate-load.sh 300
+
+# ── Code coverage ────────────────────────────────────────────────────────────
+# Run from the e2e directory but targets the repo root for test execution.
+
+REPO_ROOT := $(shell cd ../.. && pwd)
+COVERAGE_FILE := $(REPO_ROOT)/coverage.out
+
+.PHONY: test-unit
+test-unit:
+	@echo "Running unit tests with race detection and coverage..."
+	cd $(REPO_ROOT) && go test -race -coverprofile=coverage.out ./... -count=1
+	@echo ""
+	@echo "Coverage summary:"
+	@go tool cover -func=$(COVERAGE_FILE) | tail -1
+
+.PHONY: test-coverage
+test-coverage: test-unit
+	@echo ""
+	@echo "Per-function coverage (new files):"
+	@go tool cover -func=$(COVERAGE_FILE) | grep -E '(timing|availability|observability|query_telemetry|database)\.go' | column -t
+	@echo ""
+	@go tool cover -html=$(COVERAGE_FILE) -o $(REPO_ROOT)/coverage.html
+	@echo "HTML report: coverage.html (open in browser)"
 
 # ── RDS / Aurora stack ───────────────────────────────────────────────────────
 

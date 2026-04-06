@@ -101,6 +101,38 @@ func TestDatabase_DrainTelemetry(t *testing.T) {
 	assert.Empty(t, d.drainTelemetry())
 }
 
+func TestDatabase_PingSuccess(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectPing()
+
+	d := &database{
+		source:    db,
+		telemetry: &telemetryAccumulator{enabled: false},
+	}
+
+	err = d.ping()
+	assert.NoError(t, err)
+}
+
+func TestDatabase_PingError(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectPing().WillReturnError(assert.AnError)
+
+	d := &database{
+		source:    db,
+		telemetry: &telemetryAccumulator{enabled: false},
+	}
+
+	err = d.ping()
+	assert.Error(t, err)
+}
+
 func TestDatabase_QueryRecordsTelemetryOnError(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
 	require.NoError(t, err)

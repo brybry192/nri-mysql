@@ -15,7 +15,7 @@ build: clean compile test
 
 clean:
 	@echo "=== $(INTEGRATION) === [ clean ]: removing binaries and coverage file..."
-	@rm -rfv bin coverage.out coverage.html
+	@rm -rfv bin coverage.xml
 
 bin/$(BINARY_NAME):
 	@echo "=== $(INTEGRATION) === [ compile ]: building $(BINARY_NAME)..."
@@ -25,24 +25,8 @@ compile: bin/$(BINARY_NAME)
 
 test:
 	@echo "=== $(INTEGRATION) === [ test ]: running unit tests..."
-	@go test -race -coverprofile=coverage.out ./... -count=1
-	@echo "=== $(INTEGRATION) === [ test ]: coverage summary:"
-	@go tool cover -func=coverage.out | tail -1
+	@go test -race ./... -count=1
 
-test-verbose: test-debug
-test-debug:
-	@echo "=== $(INTEGRATION) === [ test ]: running unit tests (verbose)..."
-	@go test -v -race -coverprofile=coverage.out ./... -count=1
-	@echo "=== $(INTEGRATION) === [ test ]: coverage summary:"
-	@go tool cover -func=coverage.out | tail -1
-
-test-coverage: test
-	@echo "=== $(INTEGRATION) === [ coverage ]: generating detailed report..."
-	@go tool cover -func=coverage.out
-	@go tool cover -html=coverage.out -o coverage.html
-	@echo "=== $(INTEGRATION) === [ coverage ]: HTML report written to coverage.html"
-
-test-integration: integration-test
 integration-test:
 	@echo "=== $(INTEGRATION) === [ test ]: running integration tests..."
 	@docker compose -f tests/integration/docker-compose.yml up -d --build
@@ -63,9 +47,9 @@ include $(CURDIR)/build/release.mk
 
 # rt-update-changelog runs the release-toolkit run.sh script by piping it into bash to update the CHANGELOG.md.
 # It also passes down to the script all the flags added to the make target. To check all the accepted flags,
-# see: https://github.com/newrelic/release-toolkit/blob/main/contrib/ohi-release-notes/run.sh
+# see: https://github.com/newrelic/release-toolkit/v1/contrib/ohi-release-notes/run.sh
 #  e.g. `make rt-update-changelog -- -v`
 rt-update-changelog:
 	curl "https://raw.githubusercontent.com/newrelic/release-toolkit/v1/contrib/ohi-release-notes/run.sh" | bash -s -- $(filter-out $@,$(MAKECMDGOALS))
 
-.PHONY: all build clean compile test test-verbose test-debug test-coverage test-integration integration-test install rt-update-changelog
+.PHONY: all build clean compile test integration-test install rt-update-changelog
