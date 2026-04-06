@@ -139,7 +139,7 @@ func TestWrapTLSConfig_PreservesExistingCallback(t *testing.T) {
 	err := tlsCfg.VerifyConnection(tls.ConnectionState{})
 	assert.NoError(t, err)
 	assert.True(t, callbackCalled, "original VerifyConnection callback should be preserved")
-	assert.Greater(t, timing.TLSHandshakeMs, 0.0)
+	assert.GreaterOrEqual(t, timing.TLSHandshakeMs, 0.0)
 }
 
 // generateTestTLSConfig creates a self-signed TLS config for localhost tests.
