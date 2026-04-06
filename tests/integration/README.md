@@ -73,7 +73,7 @@ make compile
   -collect_connection_timing \
   -availability_check_query "SELECT 1"
 
-# Failure path — unreachable port, should still emit db.available=0
+# Failure path — unreachable port, should still emit available=0
 ./bin/nri-mysql \
   -hostname 127.0.0.1 \
   -port 19999 \
@@ -83,8 +83,8 @@ make compile
 ```
 
 Expected output includes:
-- `MysqlConnectionSample` with `db.available`, `db.connection.dnsLookupMs`, `db.connection.tcpConnectMs`
-- A second `MysqlConnectionSample` with `checkType=explicit` and `db.availabilityCheck.available`
+- `MysqlHealthSample` with `available`, `dnsLookupMs`, `tcpConnectMs`
+- A second `MysqlHealthSample` with `checkType=explicit` and `available`
 
 ### Using Docker (existing integration containers)
 
@@ -108,7 +108,7 @@ docker exec integration_nri-mysql_1 /nri-mysql \
 
 | Env Var / Flag | Default | Description |
 |---|---|---|
-| `COLLECT_CONNECTION_TIMING` | `false` | Ping + DNS/TCP timing + implicit `db.available` |
+| `COLLECT_CONNECTION_TIMING` | `false` | Ping + DNS/TCP timing + implicit availability |
 | `AVAILABILITY_CHECK_QUERY` | `""` (disabled) | If set, runs this SQL as explicit canary check |
 | `AVAILABILITY_CHECK_TIMEOUT_MS` | `5000` | Timeout in ms for the explicit check |
 | `COLLECT_QUERY_TELEMETRY` | `false` | Emit per-query performance telemetry |

@@ -29,6 +29,27 @@ CREATE TABLE IF NOT EXISTS load_test (
 ) ENGINE=InnoDB;
 SQL
 
+# Open idle connections that persist for the duration of the load test.
+# These show up as threadsConnected on the Connections dashboard page.
+IDLE_COUNT=${IDLE_CONNECTIONS:-30}
+IDLE_PIDS=""
+echo "Opening $IDLE_COUNT idle connections..."
+for i in $(seq 1 "$IDLE_COUNT"); do
+    docker compose exec -T e2e-mysql-1 \
+        mysql -u root -pe2e_test_password demo -e "SELECT SLEEP($((DURATION + 120)))" \
+        >/dev/null 2>&1 &
+    IDLE_PIDS="$IDLE_PIDS $!"
+done
+echo "  $IDLE_COUNT idle connections opened."
+
+cleanup_idle() {
+    if [ -n "$IDLE_PIDS" ]; then
+        kill $IDLE_PIDS 2>/dev/null || true
+        wait $IDLE_PIDS 2>/dev/null || true
+    fi
+}
+trap cleanup_idle EXIT
+
 START=$(date +%s)
 CYCLE=0
 

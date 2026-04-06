@@ -8,10 +8,10 @@ and a local MySQL instance entirely in Docker.
 
 | Flag | What it reports | Event type |
 |---|---|---|
-| `COLLECT_CONNECTION_TIMING` | DNS lookup + TCP connect time + response time | `MysqlConnectionSample` |
-| `AVAILABILITY_CHECK_QUERY` | Canary query result + duration + error code | `MysqlConnectionSample` (checkType=explicit) |
+| `COLLECT_CONNECTION_TIMING` | DNS lookup + TCP connect time + response time | `MysqlHealthSample` |
+| `AVAILABILITY_CHECK_QUERY` | Canary query result + duration + error code | `MysqlHealthSample` (checkType=explicit) |
 | `AVAILABILITY_CHECK_TIMEOUT_MS` | Bounds the canary query so it can't block the next cycle | -- |
-| `COLLECT_QUERY_TELEMETRY` | Per-internal-query duration + error code | `MysqlQueryTelemetrySample` |
+| `COLLECT_QUERY_TELEMETRY` | Per-internal-query duration + error code | `MysqlHealthSample` |
 
 ---
 
@@ -57,13 +57,10 @@ make run-once
 ```
 
 Look for:
-- `"event_type": "MysqlConnectionSample"` -- appears twice per cycle:
-  once without `checkType` (implicit) and once with `"checkType": "explicit"`
-- `"db.available": 1` in the implicit sample
-- `"db.responseTimeMs"` -- total response time
-- `"db.connection.dnsLookupMs"` and `"db.connection.tcpConnectMs"` (timing)
-- `"db.availabilityCheck.available": 1` in the explicit sample
-- `"event_type": "MysqlQueryTelemetrySample"` -- one per internal query
+- `"event_type": "MysqlHealthSample"` with `"checkType": "implicit"` — ping-based availability
+- `"available": 1`, `"durationMs"`, `"dnsLookupMs"`, `"tcpConnectMs"` in the implicit sample
+- `"event_type": "MysqlHealthSample"` with `"checkType": "explicit"` — canary query result
+- `"event_type": "MysqlHealthSample"` with `"checkType": "query"` — one per internal query
 
 ### 4. Watch agent logs
 
@@ -78,9 +75,9 @@ Allow 1-2 minutes for data to appear, then open **Query your data** (NRQL).
 #### Implicit availability signal
 
 ```sql
-FROM MysqlConnectionSample
-SELECT db.available, db.responseTimeMs, db.connection.dnsLookupMs, db.connection.tcpConnectMs
-WHERE checkType IS NULL
+FROM MysqlHealthSample
+SELECT available, durationMs, dnsLookupMs, tcpConnectMs
+WHERE checkType = 'implicit'
 SINCE 10 minutes ago
 LIMIT 20
 ```
@@ -88,12 +85,8 @@ LIMIT 20
 #### Explicit availability check
 
 ```sql
-FROM MysqlConnectionSample
-SELECT
-  db.availabilityCheck.available,
-  db.availabilityCheck.durationMs,
-  db.availabilityCheck.query,
-  db.availabilityCheck.errorCode
+FROM MysqlHealthSample
+SELECT available, durationMs, query, errorCode
 WHERE checkType = 'explicit'
 SINCE 10 minutes ago
 LIMIT 20
@@ -102,8 +95,9 @@ LIMIT 20
 #### Query telemetry
 
 ```sql
-FROM MysqlQueryTelemetrySample
+FROM MysqlHealthSample
 SELECT queryName, durationMs, hasError, errorCode
+WHERE checkType = 'query'
 SINCE 10 minutes ago
 LIMIT 50
 ```
@@ -111,9 +105,9 @@ LIMIT 50
 #### Availability over time (alerting use case)
 
 ```sql
-FROM MysqlConnectionSample
-SELECT latest(db.availabilityCheck.available)
-WHERE checkType = 'explicit'
+FROM MysqlHealthSample
+SELECT latest(available)
+WHERE checkType IN ('implicit', 'explicit')
 TIMESERIES 1 minute
 SINCE 30 minutes ago
 ```
@@ -139,15 +133,15 @@ docker compose stop mysql
 Wait ~30s, then query:
 
 ```sql
-FROM MysqlConnectionSample
-SELECT db.available, db.connection.errorCode
-WHERE checkType IS NULL
+FROM MysqlHealthSample
+SELECT available, errorCode, errorMessage
+WHERE checkType = 'implicit'
 SINCE 5 minutes ago
 ORDER BY timestamp DESC
 LIMIT 5
 ```
 
-**Expected:** `db.available = 0` with `errorCode` like `connection_refused`.
+**Expected:** `available = 0` with `errorCode` like `connection_refused`.
 
 Restart when done:
 ```bash
@@ -168,7 +162,7 @@ docker compose exec newrelic-infra \
   | python3 -m json.tool
 ```
 
-**Expected:** `db.availabilityCheck.errorCode = "timeout"` and returns in ~500ms.
+**Expected:** `errorCode = "timeout"` and returns in ~500ms.
 
 ---
 
