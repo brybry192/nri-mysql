@@ -95,8 +95,12 @@ func publishExplicitHealthSample(e *integration.Entity, result *checkResult, hos
 // publishQueryHealthSamples emits one MysqlHealthSample per internal monitoring
 // query with checkType=query.
 func publishQueryHealthSamples(e *integration.Entity, entries []*QueryTelemetry, hostname string, port int, remote bool) {
-	attrs := healthSampleAttrs(e, hostname, port, remote)
+	baseAttrs := healthSampleAttrs(e, hostname, port, remote)
 	for _, t := range entries {
+		// Clone baseAttrs to avoid slice aliasing — append may reuse the
+		// backing array across loop iterations, corrupting earlier entries.
+		attrs := make([]attribute.Attribute, len(baseAttrs), len(baseAttrs)+2)
+		copy(attrs, baseAttrs)
 		entryAttrs := append(attrs,
 			attribute.Attr("checkType", "query"),
 			attribute.Attr("queryName", t.QueryName),

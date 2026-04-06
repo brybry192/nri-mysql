@@ -88,7 +88,7 @@ func classifyError(err error) (code, message string) {
 	// MySQL server error — structured error number.
 	var mysqlErr *mysql.MySQLError
 	if errors.As(err, &mysqlErr) {
-		return fmt.Sprintf("mysql_error_%d", mysqlErr.Number), mysqlErr.Message
+		return fmt.Sprintf("mysql_error_%d", mysqlErr.Number), sanitizeErrorMessage(mysqlErr.Message)
 	}
 
 	// Network / I/O errors.

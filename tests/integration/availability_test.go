@@ -28,18 +28,17 @@ func runWithExtraFlags(t *testing.T, targetContainer string, extraFlags []string
 	return helpers.ExecInContainer(*container, command, envVars...)
 }
 
-// TestHealthSampleAlwaysEmitted verifies that a MysqlHealthSample with
-// available is emitted on every successful collection cycle even without any
-// observability flags set.
-func TestHealthSampleAlwaysEmitted(t *testing.T) {
-	cfg := MysqlConfigs[len(MysqlConfigs)-1] // latest supported version
+// TestNoObservabilityFlags verifies that no MysqlHealthSample is emitted when
+// all observability flags are at their defaults (off). This confirms backward
+// compatibility — existing deployments see no new event types.
+func TestNoObservabilityFlags(t *testing.T) {
+	cfg := MysqlConfigs[len(MysqlConfigs)-1]
 	envVars := []string{fmt.Sprintf("NRIA_CACHE_PATH=/tmp/%v.json", t.Name())}
 	stdout, _, _ := runWithExtraFlags(t, cfg.MasterHostname, nil, envVars...)
-	assert.Contains(t, stdout, `"MysqlHealthSample"`)
-	assert.Contains(t, stdout, `"available"`)
+	assert.NotContains(t, stdout, `"MysqlHealthSample"`, "health samples should not appear without observability flags")
 }
 
-// TestObservabilityFlags validates each observability flag individually.
+// TestMysqlObservabilityFlags validates each observability flag individually.
 func TestMysqlObservabilityFlags(t *testing.T) {
 	t.Parallel()
 	cfg := MysqlConfigs[len(MysqlConfigs)-1]
@@ -58,7 +57,7 @@ func TestMysqlObservabilityFlags(t *testing.T) {
 		},
 		{
 			Name:       "Availability check emits explicit sample with available=1",
-			ExtraFlags: []string{"-enable_availability_check=true"},
+			ExtraFlags: []string{"-availability_check_query=SELECT 1"},
 			MustContain: []string{
 				`"checkType":"explicit"`,
 				`"available"`,
@@ -68,7 +67,7 @@ func TestMysqlObservabilityFlags(t *testing.T) {
 		},
 		{
 			Name:       "Availability check custom query is reflected in sample",
-			ExtraFlags: []string{"-enable_availability_check=true", "-availability_check_query=SELECT 42"},
+			ExtraFlags: []string{"-availability_check_query=SELECT 42"},
 			MustContain: []string{
 				`"checkType":"explicit"`,
 				`"query":"SELECT 42"`,
@@ -101,11 +100,10 @@ func TestMysqlObservabilityFlags(t *testing.T) {
 }
 
 // TestConnectionFailureHealthSample verifies that when the host is unreachable
-// a MysqlHealthSample is still emitted (lazy pool) and the explicit check sample
-// carries errorCode.
+// a MysqlHealthSample is still emitted and carries an errorCode.
 func TestConnectionFailureHealthSample(t *testing.T) {
 	badHost := "nonexistent-mysql-host-00000"
-	extraFlags := []string{"-enable_availability_check=true"}
+	extraFlags := []string{"-availability_check_query=SELECT 1"}
 	envVars := []string{fmt.Sprintf("NRIA_CACHE_PATH=/tmp/%v.json", t.Name())}
 	stdout, _, _ := runWithExtraFlags(t, badHost, extraFlags, envVars...)
 	if stdout == "" {
@@ -121,7 +119,6 @@ func TestConnectionFailureHealthSample(t *testing.T) {
 func TestAvailabilityCheckTimeout(t *testing.T) {
 	cfg := MysqlConfigs[len(MysqlConfigs)-1]
 	extraFlags := []string{
-		"-enable_availability_check=true",
 		// SELECT SLEEP(30) simulates a hung server; the tight timeout should cancel it quickly.
 		"-availability_check_query=SELECT SLEEP(30)",
 		"-availability_check_timeout_ms=500",
