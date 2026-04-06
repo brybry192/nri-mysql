@@ -45,6 +45,12 @@ func openDB(dsn string, obs ObservabilityConfig, isUnixSocket bool) (*database, 
 			return nil, fmt.Errorf("failed to parse DSN for instrumented connection: %w", err)
 		}
 		cfg.DialFunc = timingDialFunc(timing)
+
+		// If TLS is configured, wrap the tls.Config to measure handshake time.
+		if cfg.TLS != nil {
+			wrapTLSConfig(cfg.TLS, timing)
+		}
+
 		connector, err := mysql.NewConnector(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create MySQL connector: %w", err)

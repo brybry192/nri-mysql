@@ -62,6 +62,9 @@ func publishImplicitHealthSample(e *integration.Entity, timing *ConnectionTiming
 	if timing != nil {
 		setGauge(ms, "dnsLookupMs", timing.DNSLookupMs)
 		setGauge(ms, "tcpConnectMs", timing.TCPConnectMs)
+		if timing.TLSHandshakeMs > 0 {
+			setGauge(ms, "tlsHandshakeMs", timing.TLSHandshakeMs)
+		}
 	}
 }
 

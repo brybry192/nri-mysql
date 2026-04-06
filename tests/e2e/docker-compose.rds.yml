@@ -17,4 +17,4 @@ services:
     depends_on: []
     volumes:
       - ./config/newrelic-infra.yml:/etc/newrelic-infra.yml:ro
-      - ./config/integrations.d/mysql-rds.yml:/etc/newrelic-infra/integrations.d/mysql-rds.yml:ro
+      - ./config/integrations.d-rds/mysql-rds.yml:/etc/newrelic-infra/integrations.d/mysql-rds.yml:ro

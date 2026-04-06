@@ -88,7 +88,7 @@ services:
       NRIA_VERBOSE: 0
     volumes:
       - ./config/newrelic-infra.yml:/etc/newrelic-infra.yml:ro
-      - ./config/integrations.d/mysql-local.yml:/etc/newrelic-infra/integrations.d/mysql-local.yml:ro
+      - ./config/integrations.d:/etc/newrelic-infra/integrations.d:ro
     cap_add:
       - SYS_PTRACE
     privileged: true

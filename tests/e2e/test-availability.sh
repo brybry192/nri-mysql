@@ -186,14 +186,16 @@ fi
 
 # ── Test 5: Kill connection mid-query (server-side termination) ───────────────
 #
-# The e2e-mysql-1-slowcheck instance runs SELECT BENCHMARK(...) as its canary
-# query.  BENCHMARK runs a CPU-bound loop for ~10-20s, giving us a reliable
-# window to find the process and KILL the connection mid-query.
+# Dynamically injects a slowcheck integration config that runs a BENCHMARK
+# canary query, restarts the agent so it picks up the config, then KILLs the
+# connection mid-query.  The config is removed and the agent restarted after
+# the test so the slow query doesn't run outside this phase.
 #
-# Note: Both KILL QUERY and KILL (connection) produce `invalid_connection` at
-# the Go level — the go-sql-driver converts any server-side termination to
-# driver.ErrBadConn ("invalid connection") before our code sees it.  We test
-# KILL (connection destroy) since it's the more severe scenario.
+# Both KILL QUERY and KILL (connection) produce `invalid_connection` at the Go
+# level — the go-sql-driver converts any server-side termination to
+# driver.ErrBadConn ("invalid connection") before our code sees it.
+
+SLOWCHECK_CONFIG="$SCRIPT_DIR/config/integrations.d/mysql-slowcheck.yml"
 
 # Helper: find the BENCHMARK query in the process list.
 find_benchmark_proc() {
@@ -216,13 +218,50 @@ wait_for_benchmark() {
     return 1
 }
 
+# Cleanup handler — remove slowcheck config even if the script exits early.
+cleanup_slowcheck() {
+    rm -f "$SLOWCHECK_CONFIG"
+}
+
 if [ "$SKIP_TO" -le 5 ]; then
-banner "Test 5/5: Kill connection — slowcheck (server-side termination)"
+banner "Test 5/5: Kill connection — on-demand BENCHMARK (server-side termination)"
 
 echo ""
-echo "  KILL — destroy connection mid-query"
+echo "  Injecting slowcheck config, restarting agent..."
 echo "  Expected error: invalid_connection"
 echo ""
+
+# Write a temporary integration config for the slowcheck instance.
+cat > "$SLOWCHECK_CONFIG" << 'SLOWCHECK_EOF'
+integrations:
+  - name: nri-mysql
+    env:
+      USERNAME: root
+      PASSWORD: e2e_test_password
+      HOSTNAME: e2e-mysql-1
+      PORT: "3306"
+      DATABASE: demo
+      REMOTE_MONITORING: "true"
+      ENABLE_TLS: "true"
+      INSECURE_SKIP_VERIFY: "true"
+      COLLECT_CONNECTION_TIMING: "true"
+      AVAILABILITY_CHECK_QUERY: "SELECT BENCHMARK(50000000, SHA2('nri-mysql-chaos-test', 256))"
+      AVAILABILITY_CHECK_TIMEOUT_MS: "30000"
+      COLLECT_QUERY_TELEMETRY: "true"
+    interval: 15s
+    labels:
+      service_name: e2e-mysql
+      instance: e2e-mysql-1-slowcheck
+      role: slowcheck
+      environment: testing
+SLOWCHECK_EOF
+
+trap cleanup_slowcheck EXIT
+
+# Restart agent so it picks up the new config file.
+docker compose restart newrelic-infra
+echo "  Agent restarted. Waiting for first BENCHMARK cycle..."
+sleep 5
 
 KILL_ROUNDS=3
 for round in $(seq 1 "$KILL_ROUNDS"); do
@@ -243,6 +282,11 @@ for round in $(seq 1 "$KILL_ROUNDS"); do
         sleep "$CYCLE"
     fi
 done
+
+# Remove slowcheck config and restart agent to restore normal operation.
+echo "  Removing slowcheck config and restarting agent..."
+cleanup_slowcheck
+docker compose restart newrelic-infra
 
 hold "$STABILIZE_DURATION" "recovery stabilization"
 fi
@@ -384,7 +428,7 @@ else
 fi
 
 # ── Update PR.md ─────────────────────────────────────────────────────────────
-# Auto-update the Chaos Test Results section in PR.md with the summary table
+# Auto-update the Availability Test Results section in PR.md with the summary table
 # visible and the full log in a collapsed <details> block.
 
 PR_MD="$REPO_ROOT/PR.md"
@@ -398,9 +442,11 @@ if [ -f "$PR_MD" ]; then
 
     # Build the replacement section.
     SECTION=$(cat <<SECTION_EOF
-## Chaos Test Results
+## Availability Test Results
 
 _Last run: $TIMESTAMP ($MODE mode, ${FAIL_CYCLES} cycle(s) per phase)_
+
+---
 
 | Test | Expected Error Code | Method |
 |---|---|---|
@@ -410,7 +456,10 @@ _Last run: $TIMESTAMP ($MODE mode, ${FAIL_CYCLES} cycle(s) per phase)_
 | 4 | \`mysql_error_1045\` | Password change (primary) |
 | 5 | \`invalid_connection\` | KILL connection (slowcheck) |
 
+---
+
 <details>
+
 <summary>Full test output (click to expand)</summary>
 
 \`\`\`
@@ -418,18 +467,19 @@ $(cat "$LOG_FILE")
 \`\`\`
 
 </details>
+
 SECTION_EOF
 )
 
     # Replace the existing section or append if not found.
-    if grep -q "^## Chaos Test Results" "$PR_MD"; then
-        # Remove old section (from "## Chaos Test Results" to the next "## " heading or EOF).
+    if grep -q "^## Availability Test Results" "$PR_MD"; then
+        # Remove old section (from "## Availability Test Results" to the next "## " heading or EOF).
         python3 -c "
 import re, sys
 content = open('$PR_MD').read()
-pattern = r'## Chaos Test Results.*?(?=\n## [^#]|\Z)'
+pattern = r'## Availability Test Results.*?(?=\n## [^#]|\Z)'
 replacement = sys.stdin.read()
-result = re.sub(pattern, replacement.rstrip(), content, count=1, flags=re.DOTALL)
+result = re.sub(pattern, replacement.rstrip() + '\n', content, count=1, flags=re.DOTALL)
 open('$PR_MD', 'w').write(result)
 " <<< "$SECTION"
         echo "  PR.md updated with chaos test results."

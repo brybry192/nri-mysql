@@ -2,8 +2,6 @@
 
 Pre-built New Relic dashboard for visualizing `MysqlHealthSample` events emitted by the nri-mysql availability monitoring features.
 
-![MySQL Availability Dashboard](MySQL-Availability-Dashboard.png)
-
 ## What it shows
 
 | Section | Description |
@@ -74,6 +72,31 @@ labels:
   availability_zone: us-east-1a # AZ grouping
   environment: production       # Environment tag
 ```
+
+## Dashboard Variables
+
+The template includes five filter variables in the top bar. All default to `*` (show everything).
+
+| Variable | Populates from | Use case |
+|---|---|---|
+| `instance` | `label.instance` | Filter to specific MySQL instances |
+| `service_name` | `label.service_name` | Filter by service grouping |
+| `role` | `label.role` | Filter by primary / replica / standalone |
+| `checkType` | `checkType` | Filter by implicit / explicit / query |
+| `environment` | `label.environment` | Filter by environment (testing, production, etc.) |
+
+These variables are populated from the label values your integration instances report. The values in the E2E config (`e2e-mysql-1`, `e2e-mysql`, `primary`, etc.) are examples — adjust them to match your environment. For instance, a production deployment might use:
+
+```yaml
+labels:
+  instance: prod-mysql-01
+  role: primary
+  service_name: payments-db
+  availability_zone: us-east-1a
+  environment: production
+```
+
+The variable dropdown queries respect the dashboard time picker, so they only show values from instances that reported data within the selected time window.
 
 ## Note
 

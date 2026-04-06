@@ -17,12 +17,13 @@ help:
 	@echo "    make repl-status          show replica replication status"
 	@echo "    make test-availability    chaos test: trigger real failure scenarios (~6 min)"
 	@echo "    make test-fast           same chaos test, 1 cycle per phase (~2 min)"
+	@echo "    make test-chaos          full E2E: up → warm-up → chaos → cool-down → down (~30 min)"
 	@echo ""
 	@echo "  RDS / Aurora MySQL testing:"
 	@echo "    make up-rds             start infra agent only (no local mysql)"
 	@echo "    make down-rds           stop rds stack"
 	@echo ""
-	@echo "  Rebuild after source changes:"
+	@echo "  Rebuild:"
 	@echo "    make rebuild            force-rebuild the agent image and restart"
 	@echo ""
 
@@ -42,6 +43,10 @@ setup:
 
 .PHONY: up
 up:
+	@if [ -z "$$NR_LICENSE_KEY" ]; then \
+		echo "ERROR: NR_LICENSE_KEY is not set."; \
+		exit 1; \
+	fi
 	docker compose up -d --build
 	@echo ""
 	@echo "Stack is up (primary: e2e-mysql-1, replica: e2e-mysql-2)."
@@ -77,6 +82,8 @@ run-once:
 		-hostname e2e-mysql-1 \
 		-port 3306 \
 		-database demo \
+		-enable_tls=true \
+		-insecure_skip_verify=true \
 		-collect_connection_timing=true \
 		-availability_check_query="SELECT 1" \
 		-availability_check_timeout_ms=5000 \
@@ -89,6 +96,8 @@ run-once:
 		-hostname e2e-mysql-1 \
 		-port 3306 \
 		-database demo \
+		-enable_tls=true \
+		-insecure_skip_verify=true \
 		-collect_connection_timing=true \
 		-availability_check_query="SELECT 1" \
 		-availability_check_timeout_ms=5000 \
@@ -103,6 +112,8 @@ run-once-replica:
 		-hostname e2e-mysql-2 \
 		-port 3306 \
 		-database demo \
+		-enable_tls=true \
+		-insecure_skip_verify=true \
 		-collect_connection_timing=true \
 		-availability_check_query="SELECT 1" \
 		-availability_check_timeout_ms=5000 \
@@ -115,6 +126,8 @@ run-once-replica:
 		-hostname e2e-mysql-2 \
 		-port 3306 \
 		-database demo \
+		-enable_tls=true \
+		-insecure_skip_verify=true \
 		-collect_connection_timing=true \
 		-availability_check_query="SELECT 1" \
 		-availability_check_timeout_ms=5000 \
@@ -172,6 +185,37 @@ test-availability: rebuild-agent
 .PHONY: test-fast
 test-fast: rebuild-agent
 	@FAST=1 ./test-availability.sh
+
+# Full end-to-end: bring up the stack, let the agent collect a healthy baseline
+# (10 min), run the chaos tests, wait for all events to flush through the NR
+# ingest pipeline (10 min), then tear everything down.
+# Total wall time: ~30 min (10 warm-up + ~6 chaos + 10 cool-down + overhead).
+.PHONY: test-chaos
+test-chaos:
+	@missing=""; \
+	[ -z "$$NR_ACCOUNT_ID" ] && missing="$$missing NR_ACCOUNT_ID"; \
+	[ -z "$$NR_API_KEY" ] && missing="$$missing NR_API_KEY"; \
+	if [ -n "$$missing" ]; then \
+		echo "ERROR: Required env vars not set:$$missing"; \
+		exit 1; \
+	fi
+	@echo "=== Full E2E chaos test ==="
+	@echo ""
+	$(MAKE) up
+	@echo ""
+	@echo "Warm-up: waiting 10 minutes for baseline collection..."
+	@sleep 600
+	@echo "Warm-up complete. Starting chaos tests..."
+	@echo ""
+	$(MAKE) test-availability || { echo "Chaos tests failed — tearing down."; $(MAKE) down; exit 1; }
+	@echo ""
+	@echo "Cool-down: waiting 10 minutes for ingest pipeline to flush..."
+	@sleep 600
+	@echo "Cool-down complete. Tearing down stack..."
+	@echo ""
+	$(MAKE) down
+	@echo ""
+	@echo "=== Full E2E chaos test complete ==="
 
 # ── RDS / Aurora stack ───────────────────────────────────────────────────────
 
