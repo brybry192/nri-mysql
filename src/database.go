@@ -55,8 +55,11 @@ func openDB(dsn string, obs ObservabilityConfig, isUnixSocket bool) (*database, 
 		if err != nil {
 			return nil, fmt.Errorf("failed to create MySQL connector: %w", err)
 		}
+		source := sql.OpenDB(connector)
+		source.SetMaxOpenConns(1)
+		source.SetConnMaxIdleTime(0)
 		return &database{
-			source:    sql.OpenDB(connector),
+			source:    source,
 			Timing:    timing,
 			telemetry: telemetry,
 		}, nil
@@ -67,6 +70,8 @@ func openDB(dsn string, obs ObservabilityConfig, isUnixSocket bool) (*database, 
 	if err != nil {
 		return nil, fmt.Errorf("error opening database connection: %w", err)
 	}
+	source.SetMaxOpenConns(1)
+	source.SetConnMaxIdleTime(0)
 	return &database{
 		source:    source,
 		Timing:    timing,
