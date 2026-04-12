@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ import (
 	infrautils "github.com/newrelic/nri-mysql/src/infrautils"
 	queryperformancemonitoring "github.com/newrelic/nri-mysql/src/query-performance-monitoring"
 	constants "github.com/newrelic/nri-mysql/src/query-performance-monitoring/constants"
+	"github.com/newrelic/nri-mysql/src/shun"
 )
 
 var (
@@ -57,6 +59,41 @@ func main() {
 		CollectQueryTelemetry:      args.CollectQueryTelemetry,
 	}
 
+	obsEnabled := obs.CollectConnectionTiming || obs.AvailabilityCheckQuery != ""
+
+	// Initialize shun manager when observability features are active.
+	var shunMgr *shun.Manager
+	if obsEnabled {
+		stateDir := args.ShunStateDir
+		if stateDir == "" {
+			stateDir = os.TempDir()
+		}
+		cycleSec := args.CollectionCycleSec
+		if cycleSec <= 0 {
+			cycleSec = 15
+		}
+		stateFile := filepath.Join(stateDir, fmt.Sprintf("nri-mysql-shun-%s-%d.json", args.Hostname, args.Port))
+		shunMgr = shun.NewManager(stateFile, time.Duration(cycleSec)*time.Second, nil)
+		if err := shunMgr.LoadState(); err != nil {
+			log.Warn("Failed to load shun state: %v", err)
+		}
+	}
+
+	// If shunned, skip the connection entirely but still emit available=0
+	// health samples so dashboards continue to report the outage.
+	if shunMgr != nil && shunMgr.IsShunned() {
+		st := shunMgr.CurrentState()
+		log.Debug("Instance %s:%d is shunned (error=%s, backoff=%d cycles, until=%s) — skipping connection",
+			args.Hostname, args.Port, st.ErrorCode, st.BackoffCycles, st.ShunnedUntil.Format(time.RFC3339))
+
+		if args.HasMetrics() {
+			shunnedErr := &classifiedError{code: st.ErrorCode, msg: "shunned: persistent failure"}
+			publishShunnedHealthSample(e, st, shunnedErr, args.Hostname, args.Port, args.RemoteMonitoring)
+		}
+		infrautils.FatalIfErr(i.Publish())
+		return
+	}
+
 	// Open DB — lazy pool, always succeeds for a valid DSN.
 	// When timing or availability check is enabled, uses mysql.NewConnector
 	// with a timingDialer so the first connection's DNS and TCP phases are measured.
@@ -77,7 +114,7 @@ func main() {
 				timeoutMs = 5000
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
-			explicitResult = explicitAvailabilityCheck(ctx, db, obs.AvailabilityCheckQuery)
+			explicitResult = explicitAvailabilityCheck(ctx, db, obs.AvailabilityCheckQuery, timeoutMs)
 			cancel()
 			responseTimeMs = explicitResult.durationMs
 			// Use the availability check result to derive the implicit connection signal.
@@ -115,10 +152,28 @@ func main() {
 
 	// Emit connection + availability samples only when at least one observability
 	// feature is enabled, so the default behavior is unchanged.
-	if args.HasMetrics() && (obs.CollectConnectionTiming || obs.AvailabilityCheckQuery != "") {
+	if args.HasMetrics() && obsEnabled {
 		publishImplicitHealthSample(e, db.Timing, responseTimeMs, connErr, args.Hostname, args.Port, args.RemoteMonitoring)
 		if explicitResult != nil {
 			publishExplicitHealthSample(e, explicitResult, args.Hostname, args.Port, args.RemoteMonitoring)
+		}
+	}
+
+	// Update shun state based on this cycle's outcome.
+	if shunMgr != nil {
+		errorCode := ""
+		if connErr != nil {
+			errorCode, _ = classifyError(connErr)
+		} else if dataErr != nil {
+			errorCode, _ = classifyError(dataErr)
+		}
+		if errorCode != "" {
+			shunMgr.RecordFailure(errorCode, shun.IsShunnableMySQL)
+		} else {
+			shunMgr.RecordSuccess()
+		}
+		if err := shunMgr.SaveState(); err != nil {
+			log.Warn("Failed to save shun state: %v", err)
 		}
 	}
 

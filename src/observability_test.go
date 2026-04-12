@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	constants "github.com/newrelic/nri-mysql/src/query-performance-monitoring/constants"
+	"github.com/newrelic/nri-mysql/src/shun"
 )
 
 func newTestEntity(t *testing.T, remote bool) *integration.Entity {
@@ -128,6 +129,29 @@ func TestPublishQueryHealthSamples_Empty(t *testing.T) {
 	e := newTestEntity(t, false)
 	publishQueryHealthSamples(e, nil, "localhost", 3306, false)
 	assert.Empty(t, e.Metrics)
+}
+
+func TestPublishShunnedHealthSample(t *testing.T) {
+	e := newTestEntity(t, false)
+	st := shun.State{
+		Shunned:          true,
+		ErrorCode:        "mysql_error_1045",
+		ConsecutiveFails: 3,
+		BackoffCycles:    8,
+	}
+	connErr := &classifiedError{code: "mysql_error_1045", msg: "shunned: persistent failure"}
+
+	publishShunnedHealthSample(e, st, connErr, "localhost", 3306, false)
+
+	require.Len(t, e.Metrics, 1)
+	ms := e.Metrics[0]
+	assert.Equal(t, "MysqlHealthSample", ms.Metrics["event_type"])
+	assert.Equal(t, "implicit", ms.Metrics["checkType"])
+	assert.Equal(t, 0.0, ms.Metrics["available"])
+	assert.Equal(t, 1.0, ms.Metrics["hasError"])
+	assert.Equal(t, 1.0, ms.Metrics["shunned"])
+	assert.Equal(t, 8.0, ms.Metrics["shunBackoffCycles"])
+	assert.Equal(t, "mysql_error_1045", ms.Metrics["errorCode"])
 }
 
 func TestPublishQueryHealthSamples_Multiple(t *testing.T) {
