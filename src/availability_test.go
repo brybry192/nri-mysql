@@ -22,7 +22,7 @@ func TestExplicitAvailabilityCheck_Success(t *testing.T) {
 		telemetry: &telemetryAccumulator{enabled: false},
 	}
 	ctx := context.Background()
-	result := explicitAvailabilityCheck(ctx, d, "SELECT 1")
+	result := explicitAvailabilityCheck(ctx, d, "SELECT 1", 0)
 
 	assert.True(t, result.available)
 	assert.Equal(t, "SELECT 1", result.query)
@@ -42,7 +42,7 @@ func TestExplicitAvailabilityCheck_QueryError(t *testing.T) {
 		telemetry: &telemetryAccumulator{enabled: false},
 	}
 	ctx := context.Background()
-	result := explicitAvailabilityCheck(ctx, d, "SELECT 1")
+	result := explicitAvailabilityCheck(ctx, d, "SELECT 1", 0)
 
 	assert.False(t, result.available)
 	assert.NotEmpty(t, result.errorCode)
@@ -61,7 +61,7 @@ func TestExplicitAvailabilityCheck_NoRows(t *testing.T) {
 		telemetry: &telemetryAccumulator{enabled: false},
 	}
 	ctx := context.Background()
-	result := explicitAvailabilityCheck(ctx, d, "SELECT 1")
+	result := explicitAvailabilityCheck(ctx, d, "SELECT 1", 0)
 
 	assert.False(t, result.available)
 }
@@ -79,10 +79,49 @@ func TestExplicitAvailabilityCheck_Timeout(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
-	result := explicitAvailabilityCheck(ctx, d, "SELECT 1")
+	result := explicitAvailabilityCheck(ctx, d, "SELECT 1", 0)
 
 	assert.False(t, result.available)
 	assert.Equal(t, "timeout", result.errorCode)
+}
+
+func TestExplicitAvailabilityCheck_SetsMaxExecutionTime(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec("SET SESSION max_execution_time = 3000").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT 1").WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow(1))
+
+	d := &database{
+		source:    db,
+		telemetry: &telemetryAccumulator{enabled: false},
+	}
+	ctx := context.Background()
+	result := explicitAvailabilityCheck(ctx, d, "SELECT 1", 3000)
+
+	assert.True(t, result.available)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestExplicitAvailabilityCheck_MaxExecutionTimeFailureNonFatal(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer db.Close()
+
+	// SET fails (e.g. MySQL < 5.7.8) but the canary query still runs.
+	mock.ExpectExec("SET SESSION max_execution_time = 5000").WillReturnError(assert.AnError)
+	mock.ExpectQuery("SELECT 1").WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow(1))
+
+	d := &database{
+		source:    db,
+		telemetry: &telemetryAccumulator{enabled: false},
+	}
+	ctx := context.Background()
+	result := explicitAvailabilityCheck(ctx, d, "SELECT 1", 5000)
+
+	assert.True(t, result.available)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestExplicitAvailabilityCheck_RowsErr(t *testing.T) {
@@ -99,7 +138,7 @@ func TestExplicitAvailabilityCheck_RowsErr(t *testing.T) {
 		telemetry: &telemetryAccumulator{enabled: false},
 	}
 	ctx := context.Background()
-	result := explicitAvailabilityCheck(ctx, d, "SELECT 1")
+	result := explicitAvailabilityCheck(ctx, d, "SELECT 1", 0)
 
 	assert.False(t, result.available)
 	assert.NotEmpty(t, result.errorCode)

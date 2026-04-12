@@ -77,7 +77,7 @@ func main() {
 				timeoutMs = 5000
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
-			explicitResult = explicitAvailabilityCheck(ctx, db, obs.AvailabilityCheckQuery)
+			explicitResult = explicitAvailabilityCheck(ctx, db, obs.AvailabilityCheckQuery, timeoutMs)
 			cancel()
 			responseTimeMs = explicitResult.durationMs
 			// Use the availability check result to derive the implicit connection signal.
