@@ -1,0 +1,10 @@
+[mysqld]
+server-id = 2
+relay-log = mysql-relay-bin
+log-bin = mysql-bin
+binlog-do-db = demo
+read_only = 1
+
+# TLS — MySQL 8.0 auto-generates self-signed certs on first init and
+# enables SSL by default. No explicit ssl-ca/cert/key needed.
+# The nri-mysql client connects with tls=skip-verify.

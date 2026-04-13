@@ -1,0 +1,107 @@
+integrations:
+
+  # ── Primary (e2e-mysql-1) ──────────────────────────────────────────────────
+  - name: nri-mysql
+    env:
+      USERNAME: root
+      PASSWORD: e2e_test_password
+      HOSTNAME: e2e-mysql-1
+      PORT: "3306"
+      DATABASE: demo
+      REMOTE_MONITORING: "true"
+
+      EXTENDED_METRICS: "true"
+      EXTENDED_INNODB_METRICS: "true"
+
+      # ── TLS (self-signed certs, skip host verification) ────────────────
+      ENABLE_TLS: "true"
+      INSECURE_SKIP_VERIFY: "true"
+
+      # ── Observability flags (all enabled for E2E validation) ───────────
+      COLLECT_CONNECTION_TIMING: "true"
+      AVAILABILITY_CHECK_QUERY: "SELECT 1"
+      AVAILABILITY_CHECK_TIMEOUT_MS: "5000"
+      COLLECT_QUERY_TELEMETRY: "true"
+
+    interval: 10s
+    labels:
+      team: go-dev
+      service_type: mysql
+      environment: testing
+      region: local.docker
+      geo: us
+      service_name: e2e-mysql
+      instance: e2e-mysql-1
+      role: primary
+      availability_zone: 2a
+
+  # ── Replica (e2e-mysql-2) ──────────────────────────────────────────────────
+  # Uses implicit ping-based availability (no explicit query) to demonstrate
+  # the difference between the two check tiers on the dashboard.
+  - name: nri-mysql
+    env:
+      USERNAME: root
+      PASSWORD: e2e_test_password
+      HOSTNAME: e2e-mysql-2
+      PORT: "3306"
+      DATABASE: demo
+      REMOTE_MONITORING: "true"
+
+      EXTENDED_METRICS: "true"
+      EXTENDED_INNODB_METRICS: "true"
+
+      # ── TLS (self-signed certs, skip host verification) ────────────────
+      ENABLE_TLS: "true"
+      INSECURE_SKIP_VERIFY: "true"
+
+      # ── Observability flags ──────────────────────────────────────────────
+      # Implicit availability only — ping + DNS/TCP timing, no canary query.
+      COLLECT_CONNECTION_TIMING: "true"
+      COLLECT_QUERY_TELEMETRY: "true"
+
+    interval: 10s
+    labels:
+      team: go-dev
+      service_type: mysql
+      environment: testing
+      region: local.docker
+      geo: us
+      service_name: e2e-mysql
+      instance: e2e-mysql-2
+      role: replica
+      availability_zone: 2b
+
+  # ── Standalone (e2e-inventorydb) ───────────────────────────────────────────
+  # A separate deploy — different service_name, its own database.
+  # Intentionally NO TLS — plain TCP baseline for comparing response times
+  # against the TLS-enabled instances on the dashboard.
+  # Uses explicit canary query for availability.
+  - name: nri-mysql
+    env:
+      USERNAME: root
+      PASSWORD: e2e_test_password
+      HOSTNAME: e2e-inventorydb
+      PORT: "3306"
+      DATABASE: inventory
+      REMOTE_MONITORING: "true"
+
+      EXTENDED_METRICS: "true"
+      EXTENDED_INNODB_METRICS: "true"
+
+      # ── Observability flags ──────────────────────────────────────────────
+      COLLECT_CONNECTION_TIMING: "true"
+      AVAILABILITY_CHECK_QUERY: "SELECT 1"
+      AVAILABILITY_CHECK_TIMEOUT_MS: "5000"
+      COLLECT_QUERY_TELEMETRY: "true"
+
+    interval: 10s
+    labels:
+      team: go-dev
+      service_type: mysql
+      environment: testing
+      region: local.docker
+      geo: us
+      service_name: inventorydb
+      instance: e2e-inventorydb
+      role: standalone
+      availability_zone: 2a
