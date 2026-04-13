@@ -30,10 +30,10 @@ test:
 integration-test:
 	@echo "=== $(INTEGRATION) === [ test ]: running integration tests..."
 	@docker compose -f tests/integration/docker-compose.yml up -d --build
-	@go test -tags=integration ./tests/integration/integration_test.go || (ret=$$?; docker compose -f tests/integration/docker-compose.yml down -v && exit $$ret)
+	@go test -race -tags=integration ./tests/integration/integration_test.go || (ret=$$?; docker compose -f tests/integration/docker-compose.yml down -v && exit $$ret)
 	@docker compose -f tests/integration/docker-compose.yml down -v
 	@docker compose -f tests/integration/docker-compose-performance.yml up -d --build
-	@go test -tags=integration_performance_metrics ./tests/integration/performance_integration_test.go || (ret=$$?; docker compose -f tests/integration/docker-compose-performance.yml down -v && exit $$ret)
+	@go test -race -tags=integration_performance_metrics ./tests/integration/performance_integration_test.go || (ret=$$?; docker compose -f tests/integration/docker-compose-performance.yml down -v && exit $$ret)
 	@docker compose -f tests/integration/docker-compose-performance.yml down -v
 
 install: bin/$(BINARY_NAME)
@@ -47,7 +47,7 @@ include $(CURDIR)/build/release.mk
 
 # rt-update-changelog runs the release-toolkit run.sh script by piping it into bash to update the CHANGELOG.md.
 # It also passes down to the script all the flags added to the make target. To check all the accepted flags,
-# see: https://github.com/newrelic/release-toolkit/blob/main/contrib/ohi-release-notes/run.sh
+# see: https://github.com/newrelic/release-toolkit/v1/contrib/ohi-release-notes/run.sh
 #  e.g. `make rt-update-changelog -- -v`
 rt-update-changelog:
 	curl "https://raw.githubusercontent.com/newrelic/release-toolkit/v1/contrib/ohi-release-notes/run.sh" | bash -s -- $(filter-out $@,$(MAKECMDGOALS))
