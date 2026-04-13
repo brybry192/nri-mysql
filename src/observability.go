@@ -7,7 +7,6 @@ import (
 	"github.com/newrelic/infra-integrations-sdk/v3/data/metric"
 	"github.com/newrelic/infra-integrations-sdk/v3/integration"
 	"github.com/newrelic/infra-integrations-sdk/v3/log"
-	"github.com/newrelic/nri-mysql/src/shun"
 )
 
 const healthSampleEventType = "MysqlHealthSample"
@@ -118,24 +117,6 @@ func publishQueryHealthSamples(e *integration.Entity, entries []*QueryTelemetry,
 			setAttribute(ms, "errorMessage", t.ErrorMessage)
 		}
 	}
-}
-
-// publishShunnedHealthSample emits a MysqlHealthSample with checkType=implicit
-// when the instance is shunned. No connection is attempted; the sample reports
-// available=0 and shunned=true so dashboards reflect the ongoing outage.
-func publishShunnedHealthSample(e *integration.Entity, st shun.State, connErr error, hostname string, port int, remote bool) {
-	attrs := healthSampleAttrs(e, hostname, port, remote)
-	attrs = append(attrs, attribute.Attr("checkType", "implicit"))
-	ms := e.NewMetricSet(healthSampleEventType, attrs...)
-
-	setGauge(ms, "available", 0)
-	setGauge(ms, "hasError", 1)
-	setGauge(ms, "shunned", 1)
-	setGauge(ms, "shunBackoffCycles", float64(st.BackoffCycles))
-
-	errCode, errMsg := classifyError(connErr)
-	setAttribute(ms, "errorCode", errCode)
-	setAttribute(ms, "errorMessage", errMsg)
 }
 
 func setGauge(ms *metric.Set, name string, val float64) {
