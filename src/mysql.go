@@ -2,14 +2,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
-
-	"github.com/newrelic/infra-integrations-sdk/v3/integration"
-	"github.com/newrelic/infra-integrations-sdk/v3/log"
-
 	"os"
 	"runtime"
 	"strings"
+	"time"
+
+	"github.com/newrelic/infra-integrations-sdk/v3/integration"
+	"github.com/newrelic/infra-integrations-sdk/v3/log"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -49,18 +50,55 @@ func main() {
 	e, err := infrautils.CreateNodeEntity(i, args.RemoteMonitoring, args.Hostname, args.Port)
 	infrautils.FatalIfErr(err)
 
-	db, err := openSQLDB(dbutils.GenerateDSN(args, ""))
+	obs := ObservabilityConfig{
+		CollectConnectionTiming:    args.CollectConnectionTiming,
+		AvailabilityCheckQuery:     args.AvailabilityCheckQuery,
+		AvailabilityCheckTimeoutMs: args.AvailabilityCheckTimeoutMs,
+		CollectQueryTelemetry:      args.CollectQueryTelemetry,
+	}
+
+	// Open DB — lazy pool, always succeeds for a valid DSN.
+	// When timing or availability check is enabled, uses mysql.NewConnector
+	// with a timingDialer so the first connection's DNS and TCP phases are measured.
+	db, err := openDB(dbutils.GenerateDSN(args, ""), obs, args.Socket != "")
 	infrautils.FatalIfErr(err)
 	defer db.close()
 
-	rawInventory, rawMetrics, dbVersion, err := getRawData(db)
-	infrautils.FatalIfErr(err)
+	// Run observability probes (timing dialer + availability check) early so that
+	// db.Timing is populated before we publish. Results are held and emitted after
+	// MysqlSample so the existing metric ordering is preserved.
+	var explicitResult *checkResult
+	var connErr error
+	var responseTimeMs float64
+	if args.HasMetrics() {
+		if obs.AvailabilityCheckQuery != "" {
+			timeoutMs := obs.AvailabilityCheckTimeoutMs
+			if timeoutMs <= 0 {
+				timeoutMs = 5000
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
+			explicitResult = explicitAvailabilityCheck(ctx, db, obs.AvailabilityCheckQuery, timeoutMs)
+			cancel()
+			responseTimeMs = explicitResult.durationMs
+			// Use the availability check result to derive the implicit connection signal.
+			if !explicitResult.available {
+				connErr = &classifiedError{code: explicitResult.errorCode, msg: explicitResult.errorMessage}
+			}
+		} else if obs.CollectConnectionTiming {
+			// No availability check — ping to trigger the timing dialer before reading db.Timing.
+			pingStart := time.Now()
+			connErr = db.ping()
+			responseTimeMs = msec(time.Since(pingStart))
+		}
+	}
 
-	if args.HasInventory() {
+	rawInventory, rawMetrics, dbVersion, dataErr := getRawData(db)
+
+	if args.HasInventory() && dataErr == nil {
 		populateInventory(e.Inventory, rawInventory)
 	}
 
-	if args.HasMetrics() {
+	if args.HasMetrics() && dataErr == nil {
 		ms := infrautils.MetricSet(
 			e,
 			"MysqlSample",
@@ -69,8 +107,32 @@ func main() {
 			args.RemoteMonitoring,
 		)
 		populateMetrics(ms, rawMetrics, dbVersion)
+
+		if obs.CollectQueryTelemetry {
+			publishQueryHealthSamples(e, db.drainTelemetry(), args.Hostname, args.Port, args.RemoteMonitoring)
+		}
 	}
+
+	// Emit connection + availability samples only when at least one observability
+	// feature is enabled, so the default behavior is unchanged.
+	if args.HasMetrics() && (obs.CollectConnectionTiming || obs.AvailabilityCheckQuery != "") {
+		publishImplicitHealthSample(e, db.Timing, responseTimeMs, connErr, args.Hostname, args.Port, args.RemoteMonitoring)
+		if explicitResult != nil {
+			publishExplicitHealthSample(e, explicitResult, args.Hostname, args.Port, args.RemoteMonitoring)
+		}
+	}
+
+	if dataErr != nil {
+		log.Error("Error collecting MySQL metrics: %s", dataErr)
+	}
+
 	infrautils.FatalIfErr(i.Publish())
+
+	// Exit with non-zero status after publishing so any partial observability
+	// samples (connection/availability) are still delivered to the agent.
+	if dataErr != nil {
+		os.Exit(1)
+	}
 
 	if args.EnableQueryMonitoring {
 		queryperformancemonitoring.PopulateQueryPerformanceMetrics(args, e, i)
